@@ -1,97 +1,85 @@
 part of 'widget.dart';
 
-final class EQIndexdStackController extends ChangeNotifier {
-  EQIndexdStackController({
-    required List<EQPage> pages,
-    this.preloadIndexes = const [],
-  }) : _pages = pages {
-    _initialize();
-  }
-
-  final List<EQPage> _pages;
-  late final Map<int, bool> _activatedChildren;
-
+/// Controller for managing which pages are loaded and visible
+class EQLazyStackController implements Listenable {
+  int _currentIndex;
+  final Set<int> _loadedIndexes = {};
   final List<int> preloadIndexes;
+  final bool disposeUnused;
+  final int maxCachedPages;
 
-  int _index = 0;
-  int get currentIndex => _index;
+  final List<VoidCallback> _listeners = [];
 
-  void _initialize() {
-    _activatedChildren = {};
-
-    if (_pages.isNotEmpty) {
-      _activatedChildren[_pages[0].index] = true;
-    }
-
-    for (final page in _pages) {
-      if (page.preload) {
-        _activatedChildren[page.index] = true;
-      }
-    }
-
+  EQLazyStackController({
+    int initialIndex = 0,
+    this.preloadIndexes = const [],
+    this.disposeUnused = false,
+    this.maxCachedPages = 3,
+  }) : _currentIndex = initialIndex {
+    _loadedIndexes.add(initialIndex);
     for (final index in preloadIndexes) {
-      if (index >= 0 && index < _pages.length) {
-        _activatedChildren[index] = true;
-      }
+      _loadedIndexes.add(index);
     }
   }
 
-  void onIndex(int index) {
-    if (_index != index && index >= 0 && index < _pages.length) {
-      _index = index;
-      _activateChild(index);
-      notifyListeners();
+  int get currentIndex => _currentIndex;
+
+  bool isLoaded(int index) => _loadedIndexes.contains(index);
+
+  void switchTo(int index, int totalPages) {
+    if (index < 0 || index >= totalPages) return;
+    if (index == _currentIndex) return;
+
+    _loadedIndexes.add(index);
+    _currentIndex = index;
+
+    if (disposeUnused && _loadedIndexes.length > maxCachedPages) {
+      _cleanupUnusedPages();
+    }
+
+    _notifyListeners();
+  }
+
+  void _cleanupUnusedPages() {
+    final protectedIndexes = {_currentIndex, ...preloadIndexes};
+    final candidatesForRemoval =
+        _loadedIndexes.difference(protectedIndexes).toList();
+
+    while (_loadedIndexes.length > maxCachedPages &&
+        candidatesForRemoval.isNotEmpty) {
+      _loadedIndexes.remove(candidatesForRemoval.removeAt(0));
     }
   }
 
-  void _activateChild(int index) {
-    if (!(_activatedChildren[index] ?? false)) {
-      _activatedChildren[index] = true;
+  /// Reset controller state
+  void reset() {
+    _loadedIndexes.clear();
+    _loadedIndexes.add(_currentIndex);
+    for (final index in preloadIndexes) {
+      _loadedIndexes.add(index);
+    }
+    _notifyListeners();
+  }
+
+  @override
+  void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
+
+  void _notifyListeners() {
+    for (final listener in List<VoidCallback>.from(_listeners)) {
+      listener();
     }
   }
 
-  void preloadPage(int index) {
-    if (index >= 0 && index < _pages.length) {
-      _activateChild(index);
-      notifyListeners();
-    }
+  /// Dispose controller resources
+  void dispose() {
+    _loadedIndexes.clear();
+    _listeners.clear();
   }
-
-  void disposePage(int index) {
-    if (index != _index && index >= 0 && index < _pages.length) {
-      _activatedChildren[index] = false;
-      notifyListeners();
-    }
-  }
-
-  List<Widget> get page {
-    return _pages.map((page) {
-      final i = page.index;
-      final isActive = _activatedChildren[i] ?? false;
-
-      if (isActive) {
-        return Visibility(
-          visible: i == _index,
-          maintainState: page.maintainState,
-          child: page.page,
-        );
-      } else {
-        return const SizedBox.shrink();
-      }
-    }).toList();
-  }
-}
-
-final class EQPage {
-  const EQPage({
-    required this.page,
-    required this.index,
-    required this.maintainState,
-    this.preload = false,
-  });
-
-  final Widget page;
-  final int index;
-  final bool maintainState;
-  final bool preload;
 }
