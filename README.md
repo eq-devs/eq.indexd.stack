@@ -17,7 +17,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  eq_indexd_stack: ^0.0.3
+  eq_indexd_stack: 
 ```
 
 Then run:
