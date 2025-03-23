@@ -22,6 +22,8 @@ class EQLazyStackController implements Listenable {
     }
   }
 
+  Set<int> get loadedIndexes => _loadedIndexes;
+
   int get currentIndex => _currentIndex;
 
   bool isLoaded(int index) => _loadedIndexes.contains(index);
