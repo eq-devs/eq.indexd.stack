@@ -17,7 +17,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  eq_indexd_stack: 
+  eq_indexed_stack: ^0.0.4
 ```
 
 Then run:
@@ -31,8 +31,8 @@ flutter pub get
 ### Basic Example
 
 ```dart
-import 'package:eq_indexd_stack/eq_indexd_stack.dart';
 import 'package:flutter/material.dart';
+import 'package:eq_indexed_stack/eq_indexed_stack.dart';
 
 class EQIndexedStackDemo extends StatefulWidget {
   @override
@@ -40,14 +40,14 @@ class EQIndexedStackDemo extends StatefulWidget {
 }
 
 class _EQIndexedStackDemoState extends State<EQIndexedStackDemo> {
-  late LazyStackController controller;
+  late EQLazyStackController controller;
   
   @override
   void initState() {
     super.initState();
     
     // Initialize controller with options
-    controller = LazyStackController(
+    controller = EQLazyStackController(
       initialIndex: 0,
       preloadIndexes: [1], // Preload second page
       disposeUnused: true,
@@ -65,7 +65,7 @@ class _EQIndexedStackDemoState extends State<EQIndexedStackDemo> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('EQ Indexed Stack Demo')),
-      body: LazyLoadIndexedStack(
+      body: EQLazyLoadIndexedStack(
         controller: controller,
         children: [
           HomePage(),
@@ -91,27 +91,27 @@ class _EQIndexedStackDemoState extends State<EQIndexedStackDemo> {
 
 #### Multiple Stack Instances
 
-You can use multiple LazyLoadIndexedStack instances with different controllers:
+You can use multiple EQLazyLoadIndexedStack instances with different controllers:
 
 ```dart
 // Main navigation controller
-final mainController = LazyStackController(
+final mainController = EQLazyStackController(
   initialIndex: 0,
   disposeUnused: true,
 );
 
 // Nested controller inside one of the main pages
-final nestedController = LazyStackController(
+final nestedController = EQLazyStackController(
   initialIndex: 0,
   maxCachedPages: 2,
 );
 
 // Use in widget tree
-LazyLoadIndexedStack(
+EQLazyLoadIndexedStack(
   controller: mainController,
   children: [
     HomePage(),
-    LazyLoadIndexedStack(
+    EQLazyLoadIndexedStack(
       controller: nestedController,
       children: [
         SubPage1(),
@@ -125,13 +125,19 @@ LazyLoadIndexedStack(
 
 #### Force Cleanup
 
-You can manually trigger cleanup of unused pages:
+You can manually manage page disposal:
 
 ```dart
-// Reset controller to clean up all pages except the current one
+// Reset controller to clean up all pages except the current one and preloaded pages
 controller.reset();
 
-// Switch pages with cleanup
+// Dispose a specific page
+controller.disposePage(2);
+
+// Dispose multiple pages at once
+controller.disposePages([1, 3, 4]);
+
+// Switch pages with possible automatic cleanup (if disposeUnused is true)
 controller.switchTo(newIndex, totalPages);
 ```
 
@@ -143,13 +149,13 @@ Track which pages are kept in memory:
 // Check if a specific page is loaded
 bool isPageLoaded = controller.isLoaded(2);
 
-// Log loaded pages
-print('Currently loaded pages: ${controller._loadedIndexes.join(', ')}');
+// Get all currently loaded page indexes
+Set<int> loadedPages = controller.loadedIndexes;
 ```
 
 ## How It Works
 
-Under the hood, `eq_indexd_stack` uses a combination of optimized techniques:
+Under the hood, `eq_indexed_stack` uses a combination of optimized techniques:
 
 1. **Efficient State Management**: Only loaded pages are included in the render tree
 2. **Offstage + TickerMode**: Hidden pages use Offstage and TickerMode to minimize resource usage
@@ -170,13 +176,14 @@ To get the best performance:
 2. Enable `disposeUnused` for apps with many heavy pages
 3. Use `preloadIndexes` for pages that users are likely to visit immediately
 4. Call `reset()` when navigation patterns change significantly
+5. Use `disposePage()` or `disposePages()` for explicit memory management
 
 ## Complete API
 
-### LazyStackController
+### EQLazyStackController
 
 ```dart
-LazyStackController({
+EQLazyStackController({
   int initialIndex = 0,           // Starting page index
   List<int> preloadIndexes = [],  // Pages to preload on initialization
   bool disposeUnused = false,     // Whether to dispose pages exceeding maxCachedPages
@@ -186,18 +193,21 @@ LazyStackController({
 
 **Properties:**
 - `currentIndex`: Current visible page index
+- `loadedIndexes`: Set of indexes that are currently loaded
 - `isLoaded(int index)`: Check if a page is loaded
 
 **Methods:**
 - `switchTo(int index, int totalPages)`: Switch to a specific page
-- `reset()`: Reset controller state, clearing all pages except current
+- `disposePage(int index)`: Dispose a specific page
+- `disposePages(List<int> indexes)`: Dispose multiple specific pages
+- `reset()`: Reset controller state, clearing all pages except current and preloaded
 - `dispose()`: Dispose controller resources
 
-### LazyLoadIndexedStack
+### EQLazyLoadIndexedStack
 
 ```dart
-LazyLoadIndexedStack({
-  required LazyStackController controller, // Controller for the stack
+EQLazyLoadIndexedStack({
+  required EQLazyStackController controller, // Controller for the stack
   required List<Widget> children,          // Pages to display
   AlignmentGeometry alignment = AlignmentDirectional.topStart, // Alignment
   StackFit sizing = StackFit.loose,        // How to size children
@@ -207,13 +217,8 @@ LazyLoadIndexedStack({
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Acknowledgements
-
-- Flutter team for the amazing framework
-- The community for inspiring better performance solutions

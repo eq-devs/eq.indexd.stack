@@ -79,6 +79,32 @@ class EQLazyStackController implements Listenable {
     }
   }
 
+  /// Dispose a specific page from the loaded indexes
+  void disposePage(int index) {
+    // Don't dispose the current page or preloaded pages
+    if (index == _currentIndex || preloadIndexes.contains(index)) {
+      return;
+    }
+
+    _loadedIndexes.remove(index);
+    _notifyListeners();
+  }
+
+  /// Dispose multiple specific pages from the loaded indexes
+  void disposePages(List<int> indexes) {
+    // Create a set of protected indexes that shouldn't be disposed
+    final protectedIndexes = {_currentIndex, ...preloadIndexes};
+
+    // Filter out protected indexes and remove the rest
+    for (final index in indexes) {
+      if (!protectedIndexes.contains(index)) {
+        _loadedIndexes.remove(index);
+      }
+    }
+
+    _notifyListeners();
+  }
+
   /// Dispose controller resources
   void dispose() {
     _loadedIndexes.clear();
