@@ -105,6 +105,8 @@ class EQLazyStackController implements Listenable {
     _notifyListeners();
   }
 
+  bool get canPop => _currentIndex == 0;
+
   /// Dispose controller resources
   void dispose() {
     _loadedIndexes.clear();
