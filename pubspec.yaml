@@ -1,6 +1,6 @@
 name: eq_indexd_stack
 description: "A high-performance lazy-loading IndexedStack for Flutter that initializes pages only when needed."
-version: 0.0.5
+version: 0.0.6
 homepage: https://github.com/eq-devs/eq.indexd.stack
 repository: https://github.com/eq-devs/eq.indexd.stack
 issue_tracker: https://github.com/eq-devs/eq.indexd.stack/issues
