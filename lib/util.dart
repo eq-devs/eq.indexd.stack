@@ -1,7 +1,17 @@
 part of 'widget.dart';
 
-/// Controller for managing which pages are loaded and visible
 class EQLazyStackController extends Listenable with WidgetsBindingObserver {
+  final List<VoidCallback> _listeners = [];
+
+  int _currentIndex;
+  final int maxCachedPages;
+  final List<int> preloadIndexes;
+  final bool disposeUnused;
+  final List<int> removableIndexes;
+  final bool isListenMemoryPressure;
+
+  final LinkedHashMap<int, bool> _loadedPages = LinkedHashMap<int, bool>();
+
   EQLazyStackController({
     int initialIndex = 0,
     this.preloadIndexes = const [],
@@ -10,78 +20,17 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     this.removableIndexes = const [],
     this.isListenMemoryPressure = false,
   }) : _currentIndex = initialIndex {
-    _loadedIndexes.add(initialIndex);
+    _markAsUsed(initialIndex);
     for (final index in preloadIndexes) {
-      _loadedIndexes.add(index);
+      _markAsUsed(index);
     }
+
     if (isListenMemoryPressure) {
       WidgetsBinding.instance.addObserver(this);
     }
   }
 
-  int _currentIndex;
-  final Set<int> _loadedIndexes = {};
-  final List<int> preloadIndexes;
-  final bool disposeUnused;
-  final int maxCachedPages;
-  final List<VoidCallback> _listeners = [];
-  final List<int> removableIndexes;
-  final bool isListenMemoryPressure;
-
-  @override
-  void didHaveMemoryPressure() {
-    _removeSpecifiedIndexes();
-  }
-
-  void _removeSpecifiedIndexes() {
-    for (final index in removableIndexes) {
-      if (index != _currentIndex && _loadedIndexes.contains(index)) {
-        _loadedIndexes.remove(index);
-      }
-    }
-    _notifyListeners();
-  }
-
-  Set<int> get loadedIndexes => _loadedIndexes;
-  int get currentIndex => _currentIndex;
-
-  bool isLoaded(int index) => _loadedIndexes.contains(index);
-
-  void switchTo(int index, int totalPages) {
-    if (index < 0 || index >= totalPages) return;
-    if (index == _currentIndex) return;
-
-    _loadedIndexes.add(index);
-    _currentIndex = index;
-
-    if (disposeUnused && _loadedIndexes.length > maxCachedPages) {
-      _cleanupUnusedPages();
-    }
-
-    _notifyListeners();
-  }
-
-  void _cleanupUnusedPages() {
-    final protectedIndexes = {_currentIndex, ...preloadIndexes};
-    final candidatesForRemoval =
-        _loadedIndexes.difference(protectedIndexes).toList();
-
-    while (_loadedIndexes.length > maxCachedPages &&
-        candidatesForRemoval.isNotEmpty) {
-      _loadedIndexes.remove(candidatesForRemoval.removeAt(0));
-    }
-  }
-
-  /// Reset controller state
-  void reset() {
-    _loadedIndexes.clear();
-    _loadedIndexes.add(_currentIndex);
-    for (final index in preloadIndexes) {
-      _loadedIndexes.add(index);
-    }
-    _notifyListeners();
-  }
-
+  // Listenable implementation
   @override
   void addListener(VoidCallback listener) {
     _listeners.add(listener);
@@ -98,36 +47,147 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     }
   }
 
-  /// Dispose a specific page from the loaded indexes
+  Set<int> get loadedIndexes => _loadedPages.keys.toSet();
+  int get currentIndex => _currentIndex;
+  bool get canGoBack => _currentIndex > 0;
+  bool isLoaded(int index) => _loadedPages.containsKey(index);
+
+  // Memory pressure handler
+  @override
+  void didHaveMemoryPressure() {
+    _removeSpecifiedIndexes();
+  }
+
+  void _removeSpecifiedIndexes() {
+    bool changed = false;
+    final protectedIndexes = {_currentIndex, ...preloadIndexes};
+
+    for (final index in removableIndexes) {
+      if (!protectedIndexes.contains(index) &&
+          _loadedPages.containsKey(index)) {
+        _loadedPages.remove(index);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      _notifyListeners();
+    }
+  }
+
+  void _markAsUsed(int index) {
+    _loadedPages.remove(index);
+    _loadedPages[index] = true;
+
+    if (_loadedPages.length > maxCachedPages) {
+      _enforceMaxSize();
+    }
+  }
+
+  void switchTo(int index, int totalPages) {
+    if (index < 0 || index >= totalPages || index == _currentIndex) return;
+
+    _currentIndex = index;
+    _markAsUsed(index);
+    _notifyListeners();
+
+    if (disposeUnused) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _enforceMaxSize();
+        _notifyListeners();
+      });
+    }
+  }
+
+  void _enforceMaxSize() {
+    if (_loadedPages.length <= maxCachedPages) return;
+
+    final protectedIndexes = {_currentIndex, ...preloadIndexes};
+    final iterator = _loadedPages.keys.iterator;
+    final toRemove = <int>[];
+
+    while (iterator.moveNext() &&
+        (_loadedPages.length - toRemove.length) > maxCachedPages) {
+      final key = iterator.current;
+      if (!protectedIndexes.contains(key)) {
+        toRemove.add(key);
+      }
+    }
+
+    for (final key in toRemove) {
+      _loadedPages.remove(key);
+    }
+  }
+
+  void reset() {
+    _loadedPages.clear();
+    _markAsUsed(_currentIndex);
+    for (final index in preloadIndexes) {
+      _markAsUsed(index);
+    }
+    _notifyListeners();
+  }
+
   void disposePage(int index) {
-    // Don't dispose the current page or preloaded pages
     if (index == _currentIndex || preloadIndexes.contains(index)) {
       return;
     }
 
-    _loadedIndexes.remove(index);
-    _notifyListeners();
+    if (_loadedPages.remove(index) != null) {
+      _notifyListeners();
+    }
   }
 
-  /// Dispose multiple specific pages from the loaded indexes
   void disposePages(List<int> indexes) {
-    // Create a set of protected indexes that shouldn't be disposed
+    bool changed = false;
     final protectedIndexes = {_currentIndex, ...preloadIndexes};
 
-    // Filter out protected indexes and remove the rest
     for (final index in indexes) {
-      if (!protectedIndexes.contains(index)) {
-        _loadedIndexes.remove(index);
+      if (!protectedIndexes.contains(index) &&
+          _loadedPages.remove(index) != null) {
+        changed = true;
       }
     }
 
+    if (changed) {
+      _notifyListeners();
+    }
+  }
+
+  void preloadPage(int index, int totalPages) {
+    if (index < 0 || index >= totalPages || _loadedPages.containsKey(index)) {
+      return;
+    }
+
+    _markAsUsed(index);
     _notifyListeners();
   }
 
-  bool get canPop => _currentIndex == 0;
+  void preloadAdjacentPages(int totalPages, [int range = 1]) {
+    bool changed = false;
+
+    for (int i = 1; i <= range; i++) {
+      final nextIndex = _currentIndex + i;
+      final prevIndex = _currentIndex - i;
+
+      if (nextIndex < totalPages && !_loadedPages.containsKey(nextIndex)) {
+        _markAsUsed(nextIndex);
+        changed = true;
+      }
+
+      if (prevIndex >= 0 && !_loadedPages.containsKey(prevIndex)) {
+        _markAsUsed(prevIndex);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      _notifyListeners();
+    }
+  }
 
   void dispose() {
-    _loadedIndexes.clear();
+    _loadedPages.clear();
     _listeners.clear();
     if (isListenMemoryPressure) {
       WidgetsBinding.instance.removeObserver(this);
