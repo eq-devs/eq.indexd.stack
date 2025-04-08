@@ -11,4 +11,5 @@
 # add canPop getter to EQLazyStackController
 
 ## 0.0.7
+# add memory pressure handling in 
 
