@@ -13,3 +13,6 @@
 ## 0.0.7
 # add memory pressure handling in 
 
+## 0.0.8
+# refactor: improved memory management and lazy loading
+
