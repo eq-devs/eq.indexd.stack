@@ -1,29 +1,48 @@
 part of 'widget.dart';
 
 /// Controller for managing which pages are loaded and visible
-class EQLazyStackController implements Listenable {
-  int _currentIndex;
-  final Set<int> _loadedIndexes = {};
-  final List<int> preloadIndexes;
-  final bool disposeUnused;
-  final int maxCachedPages;
-
-  final List<VoidCallback> _listeners = [];
-
+class EQLazyStackController extends Listenable with WidgetsBindingObserver {
   EQLazyStackController({
     int initialIndex = 0,
     this.preloadIndexes = const [],
     this.disposeUnused = false,
     this.maxCachedPages = 3,
+    this.removableIndexes = const [],
+    this.isListenMemoryPressure = false,
   }) : _currentIndex = initialIndex {
     _loadedIndexes.add(initialIndex);
     for (final index in preloadIndexes) {
       _loadedIndexes.add(index);
     }
+    if (isListenMemoryPressure) {
+      WidgetsBinding.instance.addObserver(this);
+    }
+  }
+
+  int _currentIndex;
+  final Set<int> _loadedIndexes = {};
+  final List<int> preloadIndexes;
+  final bool disposeUnused;
+  final int maxCachedPages;
+  final List<VoidCallback> _listeners = [];
+  final List<int> removableIndexes;
+  final bool isListenMemoryPressure;
+
+  @override
+  void didHaveMemoryPressure() {
+    _removeSpecifiedIndexes();
+  }
+
+  void _removeSpecifiedIndexes() {
+    for (final index in removableIndexes) {
+      if (index != _currentIndex && _loadedIndexes.contains(index)) {
+        _loadedIndexes.remove(index);
+      }
+    }
+    _notifyListeners();
   }
 
   Set<int> get loadedIndexes => _loadedIndexes;
-
   int get currentIndex => _currentIndex;
 
   bool isLoaded(int index) => _loadedIndexes.contains(index);
@@ -107,9 +126,11 @@ class EQLazyStackController implements Listenable {
 
   bool get canPop => _currentIndex == 0;
 
-  /// Dispose controller resources
   void dispose() {
     _loadedIndexes.clear();
     _listeners.clear();
+    if (isListenMemoryPressure) {
+      WidgetsBinding.instance.removeObserver(this);
+    }
   }
 }
