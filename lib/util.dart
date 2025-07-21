@@ -84,8 +84,12 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     }
   }
 
-  void switchTo(int index, int totalPages) {
-    if (index < 0 || index >= totalPages || index == _currentIndex) return;
+  void switchTo(
+    int index,
+    int totalPages,
+    //{bool notify = true}
+  ) {
+    // if (index < 0 || index >= totalPages || index == _currentIndex) return;
 
     _currentIndex = index;
     _markAsUsed(index);
