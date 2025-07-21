@@ -16,3 +16,7 @@
 ## 0.0.8
 # refactor: improved memory management and lazy loading
 
+
+## 0.0.9
+# chore: update version to 0.0.81 and modify switchTo method in EQLazyStackController
+
