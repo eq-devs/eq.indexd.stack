@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
 void main() {
@@ -44,8 +45,8 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
     mainController = LazyStackController(
       initialIndex: 0,
       disposeUnused: false,
-      maxCachedPages: 2,
-      isListenMemoryPressure: true,
+      maxCachedPages: 4,
+      isListenMemoryPressure: false,
     );
     mainController.addListener(_onControllerChanged);
     _logMemory("App started. Cache size max: 2");
@@ -294,7 +295,7 @@ class _HeavyFeedPageState extends State<HeavyFeedPage>
             ),
           );
         },
-      ),
+      ).animate().shake(),
     );
   }
 
@@ -369,7 +370,7 @@ class _ExploreGridPageState extends State<ExploreGridPage> {
           ),
         );
       },
-    );
+    ).animate().shake();
   }
 }
 
@@ -454,7 +455,7 @@ class _PremiumProfilePageState extends State<PremiumProfilePage> {
           ),
         ],
       ),
-    );
+    ).animate().shake();
   }
 
   Widget _buildStat(String label, String value) {
@@ -598,6 +599,6 @@ class SettingsSimulatorPage extends StatelessWidget {
           ),
         ),
       ],
-    );
+    ).animate().shake();
   }
 }

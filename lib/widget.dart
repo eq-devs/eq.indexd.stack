@@ -12,7 +12,8 @@ enum IndexdAnimationType {
   sharedAxisVertical,
 }
 
-class LazyLoadIndexedStack extends StatefulWidget {
+@immutable
+final class LazyLoadIndexedStack extends StatefulWidget {
   final List<Widget> children;
   final LazyStackController controller;
   final AlignmentGeometry alignment;
@@ -40,15 +41,27 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   int _previousIndex = -1;
   int _currentIndex = 0;
   bool _isForward = true;
-  bool _isAnimating = false;
-  Set<int> _lastLoadedIndexes = const {};
+
+  // ValueNotifier triggers targeted rebuilds ONLY for the children composition
+  // instead of calling setState which rebuilds the entire build() method.
+  final ValueNotifier<int> _buildVersion = ValueNotifier<int>(0);
 
   // Cached animation objects — created once per transition, NOT per frame
   CurvedAnimation? _inFade;
   CurvedAnimation? _outFade;
   CurvedAnimation? _inScale;
+  Animation<double>? _inScaleAnim;
   Animation<Offset>? _inSlide;
   Animation<Offset>? _outSlide;
+
+  // Derived reverse animations to prevent per-frame object allocation
+  Animation<double>? _acReverse;
+  Animation<double>? _outFadeReverse;
+
+  // Static inert animations for non-participating children
+  static const kInertScale = AlwaysStoppedAnimation(1.0);
+  static const kInertOpacity = AlwaysStoppedAnimation(1.0);
+  static const kInertSlide = AlwaysStoppedAnimation(Offset.zero);
 
   @override
   void initState() {
@@ -67,19 +80,15 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         vsync: this,
         duration: widget.animationDuration,
         value: 1.0,
-      );
-      _animController!.addStatusListener(_onAnimationStatus);
+      )..addStatusListener(_onAnimationStatus);
     }
   }
 
+  /// Rebuild once when animation completes to flip TickerMode off
+  /// for the outgoing child and switch it to AlwaysStoppedAnimation.
   void _onAnimationStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed ||
-        status == AnimationStatus.dismissed) {
-      if (_isAnimating && mounted) {
-        setState(() {
-          _isAnimating = false;
-        });
-      }
+    if (status == AnimationStatus.completed) {
+      _buildVersion.value++;
     }
   }
 
@@ -95,6 +104,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     if (oldWidget.animation != widget.animation) {
       if (widget.animation == IndexdAnimationType.none) {
         _disposeCachedAnimations();
+        _animController?.removeStatusListener(_onAnimationStatus);
         _animController?.dispose();
         _animController = null;
       } else if (_animController == null) {
@@ -118,28 +128,18 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
         if (widget.animation != IndexdAnimationType.none &&
             _animController != null) {
-          _isAnimating = true;
           _buildCachedAnimations();
           _animController!.forward(from: 0.0);
         }
 
-        setState(() {});
+        // Targeted rebuild — only the ValueListenableBuilder subtree rebuilds,
+        // NOT the entire State.build().
+        _buildVersion.value++;
       }
     } else {
-      // Only rebuild if loadedIndexes actually changed
-      final currentLoaded = widget.controller.loadedIndexes;
-      if (!_setEquals(currentLoaded, _lastLoadedIndexes)) {
-        setState(() {});
-      }
+      // Just rebuild for cache/loaded changes without animating
+      _buildVersion.value++;
     }
-  }
-
-  static bool _setEquals(Set<int> a, Set<int> b) {
-    if (a.length != b.length) return false;
-    for (final item in a) {
-      if (!b.contains(item)) return false;
-    }
-    return true;
   }
 
   /// Create all the CurvedAnimations and Tweens once per transition.
@@ -149,7 +149,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
     switch (widget.animation) {
       case IndexdAnimationType.fade:
-        // No cached objects needed — we use ac directly
+        _acReverse = ReverseAnimation(ac);
         break;
 
       case IndexdAnimationType.fadeThrough:
@@ -165,6 +165,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           parent: ac,
           curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
         );
+        _inScaleAnim = Tween<double>(begin: 0.92, end: 1.0).animate(_inScale!);
+        _outFadeReverse = ReverseAnimation(_outFade!);
         break;
 
       case IndexdAnimationType.sharedAxisHorizontal:
@@ -195,6 +197,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           parent: ac,
           curve: Curves.fastOutSlowIn,
         ));
+        _outFadeReverse = ReverseAnimation(_outFade!);
         break;
 
       case IndexdAnimationType.none:
@@ -209,120 +212,145 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     _inFade = null;
     _outFade = null;
     _inScale = null;
+    _inScaleAnim = null;
     _inSlide = null;
     _outSlide = null;
+    _acReverse = null;
+    _outFadeReverse = null;
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
     _disposeCachedAnimations();
+    _animController?.removeStatusListener(_onAnimationStatus);
     _animController?.dispose();
+    _buildVersion.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final loadedIndexes = widget.controller.loadedIndexes;
-    _lastLoadedIndexes = loadedIndexes;
-    final visibleChildren = List<Widget>.filled(
-      widget.children.length,
-      const SizedBox.shrink(),
-    );
-
-    for (final i in loadedIndexes) {
-      if (i < widget.children.length) {
-        final isIncoming = i == _currentIndex;
-
-        // Zero-overhead path: No animations at all
-        if (widget.animation == IndexdAnimationType.none ||
-            _animController == null) {
-          visibleChildren[i] = TickerMode(
-            enabled: isIncoming,
-            child: widget.children[i],
-          );
-          continue;
-        }
-
-        // Animated path: only wrap in AnimatedBuilder WHILE animating
-        final isOutgoing = i == _previousIndex;
-        final isEnabled = isIncoming || (isOutgoing && _isAnimating);
-
-        Widget child = TickerMode(
-          enabled: isEnabled,
-          child: widget.children[i],
+    return ValueListenableBuilder<int>(
+      valueListenable: _buildVersion,
+      builder: (context, _, __) {
+        final loadedIndexes = widget.controller.loadedIndexes;
+        final visibleChildren = List<Widget>.filled(
+          widget.children.length,
+          const SizedBox.shrink(),
         );
 
-        // Only wrap in transition widgets during active animation
-        if (_isAnimating && isEnabled) {
-          child = AnimatedBuilder(
-            animation: _animController!,
-            builder: (context, child) {
-              return _buildTransition(child!, isIncoming);
-            },
-            child: child,
-          );
+        for (final i in loadedIndexes) {
+          if (i < widget.children.length) {
+            final isIncoming = i == _currentIndex;
+
+            // Zero-overhead path: No animations at all
+            if (widget.animation == IndexdAnimationType.none ||
+                _animController == null) {
+              visibleChildren[i] = TickerMode(
+                enabled: isIncoming,
+                child: widget.children[i],
+              );
+              continue;
+            }
+
+            // Animated path — ALWAYS wrap with AnimatedBuilder to keep the
+            // widget tree structure stable across tab switches.
+            // Without this, the widget at position [i] changes TYPE from
+            // TickerMode → AnimatedBuilder(TickerMode), which forces Flutter
+            // to unmount and remount the child page (full rebuild).
+            final isOutgoing = i == _previousIndex;
+            final isAnimating = _animController!.isAnimating;
+            final isParticipating = isIncoming || (isOutgoing && isAnimating);
+
+            Widget child = TickerMode(
+              enabled: isParticipating,
+              child: widget.children[i],
+            );
+
+            // Always wrap with AnimatedBuilder. Non-participating children
+            // use AlwaysStoppedAnimation which never ticks — zero frame cost.
+            child = AnimatedBuilder(
+              animation: isParticipating
+                  ? _animController!
+                  : const AlwaysStoppedAnimation<double>(0.0),
+              builder: (context, child) {
+                return _buildTransition(
+                  child!,
+                  isIncoming,
+                  isParticipating,
+                );
+              },
+              child: child,
+            );
+
+            visibleChildren[i] = child;
+          }
         }
 
-        visibleChildren[i] = child;
-      }
-    }
-
-    return _LazyRenderStack(
-      index: _currentIndex,
-      previousIndex: _isAnimating ? _previousIndex : -1,
-      alignment: widget.alignment,
-      textDirection: widget.textDirection ?? Directionality.maybeOf(context),
-      children: visibleChildren,
+        return _LazyRenderStack(
+          index: _currentIndex,
+          previousIndex:
+              (_animController?.isAnimating ?? false) ? _previousIndex : -1,
+          alignment: widget.alignment,
+          textDirection:
+              widget.textDirection ?? Directionality.maybeOf(context),
+          children: visibleChildren,
+        );
+      },
     );
   }
 
-  Widget _buildTransition(Widget child, bool isIncoming) {
+  Widget _buildTransition(Widget child, bool isIncoming, bool isParticipating) {
     switch (widget.animation) {
       case IndexdAnimationType.fade:
         return FadeTransition(
-          opacity: isIncoming
-              ? _animController!
-              : ReverseAnimation(_animController!),
+          opacity: isParticipating
+              ? (isIncoming ? _animController! : _acReverse!)
+              : kInertOpacity,
           child: child,
         );
 
       case IndexdAnimationType.fadeThrough:
-        if (isIncoming) {
-          final scaleAnim = Tween<double>(begin: 0.92, end: 1.0)
-              .animate(_inScale ?? _animController!);
-          return FadeTransition(
-            opacity: _inFade ?? _animController!,
-            child: ScaleTransition(scale: scaleAnim, child: child),
-          );
+        Animation<double> opacity;
+        Animation<double> scale;
+
+        if (!isParticipating) {
+          opacity = kInertOpacity;
+          scale = kInertScale;
+        } else if (isIncoming) {
+          opacity = _inFade ?? _animController!;
+          scale = _inScaleAnim ?? _animController!;
         } else {
-          final fade = 1.0 - (_outFade?.value ?? _animController!.value);
-          return Opacity(
-            opacity: fade.clamp(0.0, 1.0),
-            child: child,
-          );
+          opacity = _outFadeReverse ?? _acReverse!;
+          scale = kInertScale;
         }
+
+        return FadeTransition(
+          opacity: opacity,
+          child: ScaleTransition(scale: scale, child: child),
+        );
 
       case IndexdAnimationType.sharedAxisHorizontal:
       case IndexdAnimationType.sharedAxisVertical:
-        if (isIncoming) {
-          return FadeTransition(
-            opacity: _inFade ?? _animController!,
-            child: SlideTransition(
-              position: _inSlide ?? const AlwaysStoppedAnimation(Offset.zero),
-              child: child,
-            ),
-          );
+        Animation<double> opacity;
+        Animation<Offset> slide;
+
+        if (!isParticipating) {
+          opacity = kInertOpacity;
+          slide = kInertSlide;
+        } else if (isIncoming) {
+          opacity = _inFade ?? _animController!;
+          slide = _inSlide ?? kInertSlide;
         } else {
-          final fade = 1.0 - (_outFade?.value ?? _animController!.value);
-          return Opacity(
-            opacity: fade.clamp(0.0, 1.0),
-            child: SlideTransition(
-              position: _outSlide ?? const AlwaysStoppedAnimation(Offset.zero),
-              child: child,
-            ),
-          );
+          opacity = _outFadeReverse ?? _acReverse!;
+          slide = _outSlide ?? kInertSlide;
         }
+
+        return FadeTransition(
+          opacity: opacity,
+          child: SlideTransition(position: slide, child: child),
+        );
 
       case IndexdAnimationType.none:
         return child;
