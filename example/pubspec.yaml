@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  eq_indexd_stack:
+  indexd_stack_dev:
     path: ../
 
 dev_dependencies:

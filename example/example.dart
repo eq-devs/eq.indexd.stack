@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:eq_indexd_stack/eq.indexd.stack.dart';
+import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
 // Import the LazyLoadIndexedStack implementation
 // (Assuming it's in a file called lazy_stack.dart)
@@ -16,10 +16,7 @@ class ComplexLazyStackDemo extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'LazyLoadIndexedStack Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       home: const LazyStackHomePage(),
     );
   }
@@ -572,7 +569,7 @@ class _ComplexFeedPageState extends State<ComplexFeedPage>
                       color: Colors.white,
                       shadows: [
                         Shadow(
-                          color: Colors.black.withOpacity(0.5),
+                          color: Colors.black.withValues(alpha: 0.5),
                           offset: const Offset(1, 1),
                           blurRadius: 3,
                         ),
@@ -599,9 +596,7 @@ class _ComplexFeedPageState extends State<ComplexFeedPage>
                     children: [
                       Row(
                         children: [
-                          CircleAvatar(
-                            child: Text('${index % 10}'),
-                          ),
+                          CircleAvatar(child: Text('${index % 10}')),
                           const SizedBox(width: 8),
                           Text(
                             'User ${index % 10}',
@@ -787,10 +782,7 @@ class _HeavyProfilePageState extends State<HeavyProfilePage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'Counter: $_counter',
-                style: const TextStyle(fontSize: 18),
-              ),
+              Text('Counter: $_counter', style: const TextStyle(fontSize: 18)),
               const SizedBox(width: 16),
               ElevatedButton(
                 onPressed: () {
@@ -809,8 +801,9 @@ class _HeavyProfilePageState extends State<HeavyProfilePage> {
           ListTile(
             leading: const Icon(Icons.photo),
             title: Text('Profile Item $i'),
-            subtitle:
-                const Text('This state is preserved when you switch tabs'),
+            subtitle: const Text(
+              'This state is preserved when you switch tabs',
+            ),
             onTap: widget.onImageLoad,
           ),
       ],
@@ -824,7 +817,7 @@ class WavePainter extends CustomPainter {
   final Color color;
 
   WavePainter({required this.animation, required this.color})
-      : super(repaint: animation);
+    : super(repaint: animation);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -843,8 +836,9 @@ class WavePainter extends CustomPainter {
       path.lineTo(
         i,
         height * 0.5 +
-            math.sin((i / width * 4 * math.pi) +
-                    (animation.value * 2 * math.pi)) *
+            math.sin(
+                  (i / width * 4 * math.pi) + (animation.value * 2 * math.pi),
+                ) *
                 10,
       );
     }

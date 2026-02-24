@@ -19,4 +19,5 @@
 
 ## 0.0.9
 # chore: update version to 0.0.81 and modify switchTo method in EQLazyStackController
+# chore: rename package to indexd_stack_dev
 
