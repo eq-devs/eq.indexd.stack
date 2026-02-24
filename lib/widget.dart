@@ -40,6 +40,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   int _previousIndex = -1;
   int _currentIndex = 0;
   bool _isForward = true;
+  bool _isAnimating = false;
+  Set<int> _lastLoadedIndexes = const {};
 
   // Cached animation objects — created once per transition, NOT per frame
   CurvedAnimation? _inFade;
@@ -66,6 +68,18 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         duration: widget.animationDuration,
         value: 1.0,
       );
+      _animController!.addStatusListener(_onAnimationStatus);
+    }
+  }
+
+  void _onAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed ||
+        status == AnimationStatus.dismissed) {
+      if (_isAnimating && mounted) {
+        setState(() {
+          _isAnimating = false;
+        });
+      }
     }
   }
 
@@ -98,22 +112,34 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     final newIndex = widget.controller.currentIndex;
     if (newIndex != _currentIndex) {
       if (mounted) {
-        setState(() {
-          _previousIndex = _currentIndex;
-          _currentIndex = newIndex;
-          _isForward = newIndex > _previousIndex;
-        });
+        _previousIndex = _currentIndex;
+        _currentIndex = newIndex;
+        _isForward = newIndex > _previousIndex;
 
         if (widget.animation != IndexdAnimationType.none &&
             _animController != null) {
+          _isAnimating = true;
           _buildCachedAnimations();
           _animController!.forward(from: 0.0);
         }
+
+        setState(() {});
       }
     } else {
-      // Just rebuild for cache/loaded changes without animating
-      setState(() {});
+      // Only rebuild if loadedIndexes actually changed
+      final currentLoaded = widget.controller.loadedIndexes;
+      if (!_setEquals(currentLoaded, _lastLoadedIndexes)) {
+        setState(() {});
+      }
     }
+  }
+
+  static bool _setEquals(Set<int> a, Set<int> b) {
+    if (a.length != b.length) return false;
+    for (final item in a) {
+      if (!b.contains(item)) return false;
+    }
+    return true;
   }
 
   /// Create all the CurvedAnimations and Tweens once per transition.
@@ -198,6 +224,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   @override
   Widget build(BuildContext context) {
     final loadedIndexes = widget.controller.loadedIndexes;
+    _lastLoadedIndexes = loadedIndexes;
     final visibleChildren = List<Widget>.filled(
       widget.children.length,
       const SizedBox.shrink(),
@@ -217,17 +244,17 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           continue;
         }
 
-        // Animated path
+        // Animated path: only wrap in AnimatedBuilder WHILE animating
         final isOutgoing = i == _previousIndex;
-        final isAnimating = _animController!.isAnimating;
-        final isEnabled = isIncoming || (isOutgoing && isAnimating);
+        final isEnabled = isIncoming || (isOutgoing && _isAnimating);
 
         Widget child = TickerMode(
           enabled: isEnabled,
           child: widget.children[i],
         );
 
-        if (isEnabled) {
+        // Only wrap in transition widgets during active animation
+        if (_isAnimating && isEnabled) {
           child = AnimatedBuilder(
             animation: _animController!,
             builder: (context, child) {
@@ -243,8 +270,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
     return _LazyRenderStack(
       index: _currentIndex,
-      previousIndex:
-          (_animController?.isAnimating ?? false) ? _previousIndex : -1,
+      previousIndex: _isAnimating ? _previousIndex : -1,
       alignment: widget.alignment,
       textDirection: widget.textDirection ?? Directionality.maybeOf(context),
       children: visibleChildren,

@@ -19,6 +19,12 @@
 ## 0.0.9
 # chore: rename package to indexd_stack_dev
 
+## 0.1.1
+
+### 🐛 Fixes
+- **Fixed page rebuild bug**: Pages no longer rebuild continuously when animations are enabled. `AnimatedBuilder` is now only attached during the active 300ms transition and stripped immediately after.
+- **Eliminated unnecessary setState**: Cache/loaded changes now use a targeted `Set` equality check instead of blindly calling `setState(() {})`.
+
 ## 0.1.0
 
 ### ⚡ Performance (Breaking)
