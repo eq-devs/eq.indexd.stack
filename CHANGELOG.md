@@ -1,3 +1,10 @@
+## 0.1.2
+
+### ⚡ Performance & Fixes
+- **Strict Widget Tree Stabilization**: Fixed the critical bug where tabs would rebuild on every switch. The `AnimatedBuilder` wrapper depth is now perfectly stable across all `IndexdAnimationType` transitions, ensuring Flutter never unmounts the page element.
+- **Zero Per-Frame Allocations**: Eliminated all dynamic `Animation` object creation within the `build()` method. All `ReverseAnimation` and derived animation objects are now tightly pre-cached once per transition, guaranteeing `ScaleTransition` and `FadeTransition` never invoke `didUpdateWidget` rebuilds during layout.
+- **Const Inert Animations**: Optimized non-participating loaded tabs to use `static const kInertScale = AlwaysStoppedAnimation(1.0)` and similar static wrappers. This allocates 0 bytes of memory per frame for background tabs while perfectly maintaining widget tree depth.
+
 ## 0.0.3
 # refactor: rename IndexdStackController to LazyStackController
 
