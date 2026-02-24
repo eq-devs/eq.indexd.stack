@@ -1,4 +1,4 @@
-# EQ Indexed Stack
+# Indexed Stack
 
 A high-performance lazy-loading `IndexedStack` implementation for Flutter that initializes pages only when they are needed. Perfect for bottom navigation, tab views, and any UI that requires switching between multiple views.
 
@@ -34,20 +34,20 @@ flutter pub get
 import 'package:flutter/material.dart';
 import 'package:eq_indexed_stack/eq_indexed_stack.dart';
 
-class EQIndexedStackDemo extends StatefulWidget {
+class IndexedStackDemo extends StatefulWidget {
   @override
-  _EQIndexedStackDemoState createState() => _EQIndexedStackDemoState();
+  _IndexedStackDemoState createState() => _IndexedStackDemoState();
 }
 
-class _EQIndexedStackDemoState extends State<EQIndexedStackDemo> {
-  late EQLazyStackController controller;
+class _IndexedStackDemoState extends State<IndexedStackDemo> {
+  late LazyStackController controller;
   
   @override
   void initState() {
     super.initState();
     
     // Initialize controller with options
-    controller = EQLazyStackController(
+    controller = LazyStackController(
       initialIndex: 0,
       preloadIndexes: [1], // Preload second page
       disposeUnused: true,
@@ -64,8 +64,8 @@ class _EQIndexedStackDemoState extends State<EQIndexedStackDemo> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('EQ Indexed Stack Demo')),
-      body: EQLazyLoadIndexedStack(
+      appBar: AppBar(title: Text('Indexed Stack Demo')),
+      body: LazyLoadIndexedStack(
         controller: controller,
         children: [
           HomePage(),
@@ -91,27 +91,27 @@ class _EQIndexedStackDemoState extends State<EQIndexedStackDemo> {
 
 #### Multiple Stack Instances
 
-You can use multiple EQLazyLoadIndexedStack instances with different controllers:
+You can use multiple LazyLoadIndexedStack instances with different controllers:
 
 ```dart
 // Main navigation controller
-final mainController = EQLazyStackController(
+final mainController = LazyStackController(
   initialIndex: 0,
   disposeUnused: true,
 );
 
 // Nested controller inside one of the main pages
-final nestedController = EQLazyStackController(
+final nestedController = LazyStackController(
   initialIndex: 0,
   maxCachedPages: 2,
 );
 
 // Use in widget tree
-EQLazyLoadIndexedStack(
+LazyLoadIndexedStack(
   controller: mainController,
   children: [
     HomePage(),
-    EQLazyLoadIndexedStack(
+    LazyLoadIndexedStack(
       controller: nestedController,
       children: [
         SubPage1(),
@@ -180,10 +180,10 @@ To get the best performance:
 
 ## Complete API
 
-### EQLazyStackController
+### LazyStackController
 
 ```dart
-EQLazyStackController({
+LazyStackController({
   int initialIndex = 0,           // Starting page index
   List<int> preloadIndexes = [],  // Pages to preload on initialization
   bool disposeUnused = false,     // Whether to dispose pages exceeding maxCachedPages
@@ -203,11 +203,11 @@ EQLazyStackController({
 - `reset()`: Reset controller state, clearing all pages except current and preloaded
 - `dispose()`: Dispose controller resources
 
-### EQLazyLoadIndexedStack
+### LazyLoadIndexedStack
 
 ```dart
-EQLazyLoadIndexedStack({
-  required EQLazyStackController controller, // Controller for the stack
+LazyLoadIndexedStack({
+  required LazyStackController controller, // Controller for the stack
   required List<Widget> children,          // Pages to display
   AlignmentGeometry alignment = AlignmentDirectional.topStart, // Alignment
   StackFit sizing = StackFit.loose,        // How to size children

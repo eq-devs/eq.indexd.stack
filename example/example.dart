@@ -1,9 +1,6 @@
-import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
-
-// Import the LazyLoadIndexedStack implementation
-// (Assuming it's in a file called lazy_stack.dart)
 
 void main() {
   runApp(const ComplexLazyStackDemo());
@@ -15,8 +12,14 @@ class ComplexLazyStackDemo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LazyLoadIndexedStack Demo',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      title: 'Premium LazyStack Demo',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        primaryColor: Colors.deepPurpleAccent,
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        useMaterial3: true,
+        fontFamily: 'Roboto',
+      ),
       home: const LazyStackHomePage(),
     );
   }
@@ -30,826 +33,527 @@ class LazyStackHomePage extends StatefulWidget {
 }
 
 class _LazyStackHomePageState extends State<LazyStackHomePage> {
-  // Create multiple controllers for different use cases
-  late EQLazyStackController mainPageController;
-  late EQLazyStackController nestedController;
-  late EQLazyStackController modalController;
-
-  // Page tracking
-  final Map<int, int> pageVisitCounts = {};
-  int totalPageSwitches = 0;
-
-  // Memory usage tracking
-  final List<String> memoryLog = [];
+  late LazyStackController mainController;
+  final List<String> memoryLogs = [];
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize main controller with preloaded pages
-    mainPageController = EQLazyStackController(
+    mainController = LazyStackController(
       initialIndex: 0,
-      preloadIndexes: [1], // Preload the second tab
-      disposeUnused: true,
-      maxCachedPages: 3,
-    );
-
-    // Nested controller inside one of the main pages
-    nestedController = EQLazyStackController(
-      initialIndex: 0,
-      disposeUnused: true,
+      disposeUnused: false,
       maxCachedPages: 2,
+      isListenMemoryPressure: true,
     );
-
-    // Controller for modal content
-    modalController = EQLazyStackController(
-      initialIndex: 0,
-      disposeUnused: false, // Keep all modal pages loaded
-    );
-
-    // Log initial page visit
-    _logPageVisit(0);
-    _logMemoryUsage("App started");
+    mainController.addListener(_onControllerChanged);
+    _logMemory("App started. Cache size max: 2");
   }
 
-  void _logPageVisit(int pageIndex) {
-    pageVisitCounts[pageIndex] = (pageVisitCounts[pageIndex] ?? 0) + 1;
-    totalPageSwitches++;
+  void _onControllerChanged() {
     setState(() {});
   }
 
-  void _logMemoryUsage(String event) {
-    final timestamp = DateTime.now().toString().split('.').first;
-    final loadedPages = [
-      ...mainPageController.loadedIndexes.map((i) => 'Main-$i'),
-      ...nestedController.loadedIndexes.map((i) => 'Nested-$i'),
-      ...modalController.loadedIndexes.map((i) => 'Modal-$i'),
-    ].join(', ');
-
-    memoryLog.add('[$timestamp] $event - Loaded: $loadedPages');
-
-    // Limit log size
-    if (memoryLog.length > 10) {
-      memoryLog.removeAt(0);
-    }
+  void _logMemory(String event) {
+    final timestamp = DateTime.now().toString().split('.').first.substring(11);
+    final loaded = mainController.loadedIndexes.join(', ');
+    setState(() {
+      memoryLogs.insert(0, '[$timestamp] $event | Active Set: {$loaded}');
+      if (memoryLogs.length > 20) memoryLogs.removeLast();
+    });
   }
 
   @override
   void dispose() {
-    mainPageController.dispose();
-    nestedController.dispose();
-    modalController.dispose();
+    mainController.removeListener(_onControllerChanged);
+    mainController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       appBar: AppBar(
-        title: const Text('LazyLoadIndexedStack Demo'),
+        title: const Text('Premium Architecture'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.memory),
-            onPressed: () => _showMemoryLog(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_fix_high),
-            onPressed: () => _forceCleanup(),
+            onPressed: () => _showMemoryLogs(context),
           ),
         ],
       ),
-      body: Column(
+      body: LazyLoadIndexedStack(
+        controller: mainController,
         children: [
-          // Navigation buttons
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                for (int i = 0; i < 5; i++)
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: mainPageController.currentIndex == i
-                          ? Colors.blue
-                          : null,
-                      foregroundColor: mainPageController.currentIndex == i
-                          ? Colors.white
-                          : null,
-                    ),
-                    onPressed: () {
-                      mainPageController.switchTo(i, 5);
-                      _logPageVisit(i);
-                      setState(() {});
-                    },
-                    child: Text('Page ${i + 1}'),
-                  ),
-              ],
-            ),
+          HeavyFeedPage(onAction: () => _logMemory("Feed list scrolled/acted")),
+          ExploreGridPage(onLoad: () => _logMemory("Explore grid loaded")),
+          PremiumProfilePage(
+            onInteract: () => _logMemory("Profile interaction"),
           ),
-          Expanded(
-            child: EQLazyLoadIndexedStack(
-              controller: mainPageController,
-              children: [
-                _buildHomePage(),
-                _buildFeedPage(),
-                _buildExplorePage(),
-                _buildProfilePage(),
-                _buildSettingsPage(),
-              ],
-            ),
-          ),
-          // Debug info bar
-          Container(
-            padding: const EdgeInsets.all(8),
-            color: Colors.black87,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Active: ${mainPageController.currentIndex}',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                Text(
-                  'Loaded: ${mainPageController.loadedIndexes.join(', ')}',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                Text(
-                  'Switches: $totalPageSwitches',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
+          SettingsSimulatorPage(
+            controller: mainController,
+            onSettingsChanged: (msg) => _logMemory(msg),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () => _showModalMenu(context),
-      ),
-    );
-  }
-
-  // Home page with a counter and nested tabs
-  Widget _buildHomePage() {
-    return Column(
-      children: [
-        // Visit counter for this page
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Home visited ${pageVisitCounts[0] ?? 1} times',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ),
-
-        // Nested navigation
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (int i = 0; i < 3; i++)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: nestedController.currentIndex == i
-                          ? Colors.amber
-                          : null,
-                      foregroundColor: nestedController.currentIndex == i
-                          ? Colors.black
-                          : null,
-                    ),
-                    onPressed: () {
-                      nestedController.switchTo(i, 3);
-                      _logMemoryUsage("Nested navigation changed to $i");
-                      setState(() {});
-                    },
-                    child: Text(['Recent', 'Favorites', 'Trending'][i]),
-                  ),
+      bottomNavigationBar: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.6),
+            child: BottomNavigationBar(
+              currentIndex: mainController.currentIndex,
+              onTap: (index) {
+                _logMemory("Switched to Tab $index");
+                mainController.switchTo(index, 4);
+              },
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              selectedItemColor: Colors.deepPurpleAccent,
+              unselectedItemColor: Colors.white54,
+              type: BottomNavigationBarType.fixed,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.dynamic_feed),
+                  label: 'Feed',
                 ),
-            ],
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.explore),
+                  label: 'Explore',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Profile',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.settings),
+                  label: 'Settings',
+                ),
+              ],
+            ),
           ),
         ),
-
-        // Nested content using another LazyLoadIndexedStack
-        Expanded(
-          child: EQLazyLoadIndexedStack(
-            controller: nestedController,
-            children: [
-              _buildNestedContent('Recent Items', Colors.blue.shade100),
-              _buildNestedContent('Favorite Items', Colors.amber.shade100),
-              _buildNestedContent('Trending Items', Colors.pink.shade100),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Feed page with a complex list and animations
-  Widget _buildFeedPage() {
-    return ComplexFeedPage(
-      visitCount: pageVisitCounts[1] ?? 0,
-      onAction: () => _logMemoryUsage("Feed action triggered"),
-    );
-  }
-
-  // Explore page with a grid layout
-  Widget _buildExplorePage() {
-    return GridViewPage(
-      visitCount: pageVisitCounts[2] ?? 0,
-      onLoadMore: () => _logMemoryUsage("Explore loaded more content"),
-    );
-  }
-
-  // Profile page with heavy content
-  Widget _buildProfilePage() {
-    return HeavyProfilePage(
-      visitCount: pageVisitCounts[3] ?? 0,
-      onImageLoad: () => _logMemoryUsage("Profile loaded images"),
-    );
-  }
-
-  // Settings page
-  Widget _buildSettingsPage() {
-    return ListView(
-      children: [
-        ListTile(
-          title: Text('Settings visited ${pageVisitCounts[4] ?? 0} times'),
-          subtitle: const Text('This page demonstrates memory efficiency'),
-        ),
-        const Divider(),
-        SwitchListTile(
-          title: const Text('Preload Next Page'),
-          value: mainPageController.preloadIndexes.isNotEmpty,
-          onChanged: (value) {
-            // This would normally update the controller's preloadIndexes
-            _logMemoryUsage("Preload setting changed");
-          },
-        ),
-        SwitchListTile(
-          title: const Text('Dispose Unused Pages'),
-          value: mainPageController.disposeUnused,
-          onChanged: (value) {
-            // This would normally update the controller's disposeUnused
-            _logMemoryUsage("Dispose setting changed");
-          },
-        ),
-        ListTile(
-          title: const Text('Max Cached Pages'),
-          trailing: DropdownButton<int>(
-            value: mainPageController.maxCachedPages,
-            items: [1, 2, 3, 4, 5].map((int value) {
-              return DropdownMenuItem<int>(
-                value: value,
-                child: Text(value.toString()),
-              );
-            }).toList(),
-            onChanged: (newValue) {
-              // This would normally update the controller's maxCachedPages
-              _logMemoryUsage("Changed max cache to $newValue");
-            },
-          ),
-        ),
-        const Divider(),
-        ListTile(
-          title: const Text('Reset All Page Counters'),
-          trailing: const Icon(Icons.refresh),
-          onTap: () {
-            setState(() {
-              pageVisitCounts.clear();
-              totalPageSwitches = 0;
-            });
-            _logMemoryUsage("Reset counters");
-          },
-        ),
-        ListTile(
-          title: const Text('Force Cleanup'),
-          trailing: const Icon(Icons.cleaning_services),
-          onTap: _forceCleanup,
-        ),
-      ],
-    );
-  }
-
-  // Nested content
-  Widget _buildNestedContent(String title, Color backgroundColor) {
-    return Container(
-      color: backgroundColor,
-      child: ListView.builder(
-        itemCount: 15,
-        itemBuilder: (context, index) {
-          return ListTile(
-            title: Text('$title Item $index'),
-            leading: CircleAvatar(child: Text('${index + 1}')),
-            onTap: () => _logMemoryUsage("Tapped on $title item $index"),
-          );
-        },
       ),
     );
   }
 
-  // Modal menu with another LazyLoadIndexedStack
-  void _showModalMenu(BuildContext context) {
+  void _showMemoryLogs(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.6,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Text(
-                    'Modal Menu',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      ElevatedButton(
-                        child: const Text('Page 1'),
-                        onPressed: () {
-                          modalController.switchTo(0, 3);
-                          setModalState(() {});
-                          _logMemoryUsage("Modal switched to page 0");
-                        },
-                      ),
-                      ElevatedButton(
-                        child: const Text('Page 2'),
-                        onPressed: () {
-                          modalController.switchTo(1, 3);
-                          setModalState(() {});
-                          _logMemoryUsage("Modal switched to page 1");
-                        },
-                      ),
-                      ElevatedButton(
-                        child: const Text('Page 3'),
-                        onPressed: () {
-                          modalController.switchTo(2, 3);
-                          setModalState(() {});
-                          _logMemoryUsage("Modal switched to page 2");
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: EQLazyLoadIndexedStack(
-                      controller: modalController,
-                      children: [
-                        _buildModalPage('Modal Page 1', Colors.red.shade100),
-                        _buildModalPage('Modal Page 2', Colors.green.shade100),
-                        _buildModalPage('Modal Page 3', Colors.purple.shade100),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    ).then((_) {
-      _logMemoryUsage("Modal closed");
-    });
-  }
-
-  // Modal page content
-  Widget _buildModalPage(String title, Color backgroundColor) {
-    return Container(
-      color: backgroundColor,
-      child: Center(
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            const Text(
+              'Memory & Cache Logs',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
-            const SizedBox(height: 20),
-            const Text('This page maintains its state even when not visible'),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              child: const Text('Simulate Heavy Action'),
-              onPressed: () {
-                _logMemoryUsage("Heavy action on $title");
-              },
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: memoryLogs.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: Text(
+                      memoryLogs[index],
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  // Show memory log dialog
-  void _showMemoryLog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Memory Usage Log'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: memoryLog.length,
-            itemBuilder: (context, index) {
-              return Text(memoryLog[index]);
-            },
+class HeavyFeedPage extends StatefulWidget {
+  final VoidCallback onAction;
+  const HeavyFeedPage({super.key, required this.onAction});
+
+  @override
+  State<HeavyFeedPage> createState() => _HeavyFeedPageState();
+}
+
+class _HeavyFeedPageState extends State<HeavyFeedPage>
+    with AutomaticKeepAliveClientMixin {
+  final List<int> items = List.generate(50, (i) => i);
+
+  @override
+  bool get wantKeepAlive => true; // Simulating typical heavy stateful page
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollInfo) {
+        if (scrollInfo is ScrollEndNotification) {
+          widget.onAction();
+        }
+        return false;
+      },
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 100, top: 16),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          return Card(
+            color: const Color(0xFF2A2A2A),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor:
+                            Colors.primaries[index % Colors.primaries.length],
+                        child: Text('${index + 1}'),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'User ${index + 1}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            '2 hours ago',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.image,
+                        size: 50,
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildAction(Icons.favorite_border, 'Like'),
+                      _buildAction(Icons.comment_outlined, 'Comment'),
+                      _buildAction(Icons.share, 'Share'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAction(IconData icon, String label) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white70, size: 20),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(color: Colors.white70)),
+      ],
+    );
+  }
+}
+
+class ExploreGridPage extends StatefulWidget {
+  final VoidCallback onLoad;
+  const ExploreGridPage({super.key, required this.onLoad});
+
+  @override
+  State<ExploreGridPage> createState() => _ExploreGridPageState();
+}
+
+class _ExploreGridPageState extends State<ExploreGridPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onLoad();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: 30,
+      itemBuilder: (context, index) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.primaries[index % Colors.primaries.length].withValues(
+                  alpha: 0.8,
+                ),
+                Colors.primaries[(index + 1) % Colors.primaries.length]
+                    .withValues(alpha: 0.5),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            child: const Text('Clear Log'),
-            onPressed: () {
-              setState(() {
-                memoryLog.clear();
-              });
-              Navigator.of(context).pop();
-            },
+          child: const Center(
+            child: Icon(
+              Icons.play_circle_fill,
+              color: Colors.white54,
+              size: 40,
+            ),
           ),
-          TextButton(
-            child: const Text('Close'),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+        );
+      },
+    );
+  }
+}
+
+class PremiumProfilePage extends StatefulWidget {
+  final VoidCallback onInteract;
+  const PremiumProfilePage({super.key, required this.onInteract});
+
+  @override
+  State<PremiumProfilePage> createState() => _PremiumProfilePageState();
+}
+
+class _PremiumProfilePageState extends State<PremiumProfilePage> {
+  int _followers = 12053;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 100),
+      child: Column(
+        children: [
+          Container(
+            height: 250,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.deepPurple, Colors.indigo],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                    ),
+                    child: const Icon(
+                      Icons.person,
+                      size: 50,
+                      color: Colors.white54,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Senior Flutter Dev',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Optimization Enthusiast',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildStat('Posts', '142'),
+              GestureDetector(
+                onTap: () {
+                  setState(() => _followers++);
+                  widget.onInteract();
+                },
+                child: _buildStat('Followers', '$_followers\n(Tap me)'),
+              ),
+              _buildStat('Following', '431'),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // Force cleanup of unused pages
-  void _forceCleanup() {
-    // Reset controllers to cleanup memory
-    mainPageController.reset();
-    nestedController.reset();
-
-    setState(() {});
-    _logMemoryUsage("Forced cleanup");
-
-    // Show snackbar
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Unused pages have been cleaned up'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-}
-
-// A page with complex animated content
-class ComplexFeedPage extends StatefulWidget {
-  final int visitCount;
-  final VoidCallback onAction;
-
-  const ComplexFeedPage({
-    super.key,
-    required this.visitCount,
-    required this.onAction,
-  });
-
-  @override
-  State<ComplexFeedPage> createState() => _ComplexFeedPageState();
-}
-
-class _ComplexFeedPageState extends State<ComplexFeedPage>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  final List<String> _items = List.generate(30, (i) => 'Feed Item ${i + 1}');
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildStat(String label, String value) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Feed visited ${widget.visitCount} times',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
         ),
-
-        // Animated header
-        SizedBox(
-          height: 100,
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return CustomPaint(
-                painter: WavePainter(
-                  animation: _controller,
-                  color: Colors.blue,
-                ),
-                child: Center(
-                  child: Text(
-                    'Feed Content',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          offset: const Offset(1, 1),
-                          blurRadius: 3,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        // Feed content
-        Expanded(
-          child: ListView.builder(
-            itemCount: _items.length,
-            itemBuilder: (context, index) {
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(child: Text('${index % 10}')),
-                          const SizedBox(width: 8),
-                          Text(
-                            'User ${index % 10}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(_items[index]),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.thumb_up_outlined),
-                            onPressed: widget.onAction,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.comment_outlined),
-                            onPressed: widget.onAction,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.share_outlined),
-                            onPressed: widget.onAction,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white54, fontSize: 14),
         ),
       ],
     );
   }
 }
 
-// Grid view page
-class GridViewPage extends StatefulWidget {
-  final int visitCount;
-  final VoidCallback onLoadMore;
+class SettingsSimulatorPage extends StatelessWidget {
+  final LazyStackController controller;
+  final Function(String) onSettingsChanged;
 
-  const GridViewPage({
+  const SettingsSimulatorPage({
     super.key,
-    required this.visitCount,
-    required this.onLoadMore,
+    required this.controller,
+    required this.onSettingsChanged,
   });
-
-  @override
-  State<GridViewPage> createState() => _GridViewPageState();
-}
-
-class _GridViewPageState extends State<GridViewPage> {
-  final List<Color> _colors = List.generate(100, (i) {
-    return Color.fromRGBO(
-      (math.Random().nextDouble() * 255).round(),
-      (math.Random().nextDouble() * 255).round(),
-      (math.Random().nextDouble() * 255).round(),
-      1,
-    );
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Explore visited ${widget.visitCount} times',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(8),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-            ),
-            itemCount: _colors.length,
-            itemBuilder: (context, index) {
-              if (index == _colors.length - 1) {
-                widget.onLoadMore();
-              }
-
-              return InkWell(
-                onTap: () {},
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: _colors[index],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${index + 1}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// Heavy profile page
-class HeavyProfilePage extends StatefulWidget {
-  final int visitCount;
-  final VoidCallback onImageLoad;
-
-  const HeavyProfilePage({
-    super.key,
-    required this.visitCount,
-    required this.onImageLoad,
-  });
-
-  @override
-  State<HeavyProfilePage> createState() => _HeavyProfilePageState();
-}
-
-class _HeavyProfilePageState extends State<HeavyProfilePage> {
-  int _counter = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // Simulate heavy load
-    widget.onImageLoad();
-  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
+      padding: const EdgeInsets.all(16).copyWith(bottom: 100),
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Profile visited ${widget.visitCount} times',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        const Text(
+          'Cache Settings',
+          style: TextStyle(
+            color: Colors.deepPurpleAccent,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
         ),
-
-        // Profile header
-        Container(
-          height: 200,
-          color: Colors.blueGrey,
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 50),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'User Profile',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
+        const SizedBox(height: 16),
+        ListTile(
+          title: const Text(
+            'Dispose Unused Pages',
+            style: TextStyle(color: Colors.white),
+          ),
+          subtitle: const Text(
+            'Aggressively removes inactive pages',
+            style: TextStyle(color: Colors.white54),
+          ),
+          trailing: Switch(
+            value: controller.disposeUnused,
+            activeColor: Colors.deepPurpleAccent,
+            onChanged: (val) {
+              // Simulated for UI
+            },
           ),
         ),
-
-        // Counter with state that should be preserved
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('Counter: $_counter', style: const TextStyle(fontSize: 18)),
-              const SizedBox(width: 16),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _counter++;
-                  });
-                },
-                child: const Text('Increment'),
-              ),
-            ],
+        ListTile(
+          title: const Text(
+            'Simulate Memory Pressure',
+            style: TextStyle(color: Colors.white),
+          ),
+          subtitle: const Text(
+            'Triggers OS low memory warning handler',
+            style: TextStyle(color: Colors.white54),
+          ),
+          trailing: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () {
+              controller.didHaveMemoryPressure();
+              onSettingsChanged("SIMULATED MEMORY PRESSURE - Cleared Cache");
+            },
+            child: const Text('Flush', style: TextStyle(color: Colors.white)),
           ),
         ),
-
-        // Content
-        for (int i = 0; i < 10; i++)
-          ListTile(
-            leading: const Icon(Icons.photo),
-            title: Text('Profile Item $i'),
-            subtitle: const Text(
-              'This state is preserved when you switch tabs',
-            ),
-            onTap: widget.onImageLoad,
+        const Divider(color: Colors.white24, height: 32),
+        const Text(
+          'Information',
+          style: TextStyle(
+            color: Colors.deepPurpleAccent,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
+        ),
+        const SizedBox(height: 16),
+        const ListTile(
+          leading: Icon(Icons.info_outline, color: Colors.white54),
+          title: Text(
+            'Optimized Architecture',
+            style: TextStyle(color: Colors.white),
+          ),
+          subtitle: Text(
+            'This package now usages native ChangeNotifier bindings, '
+            'synchronous micro-task evictions, and zero-allocation KeyedSubtrees '
+            'to ensure maximum 120fps performance.',
+            style: TextStyle(color: Colors.white54),
+          ),
+        ),
       ],
     );
   }
-}
-
-// Wave painter for animated header
-class WavePainter extends CustomPainter {
-  final Animation<double> animation;
-  final Color color;
-
-  WavePainter({required this.animation, required this.color})
-    : super(repaint: animation);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    final width = size.width;
-    final height = size.height;
-
-    path.moveTo(0, height * 0.5);
-
-    // Create wave pattern
-    for (double i = 0; i < width; i++) {
-      path.lineTo(
-        i,
-        height * 0.5 +
-            math.sin(
-                  (i / width * 4 * math.pi) + (animation.value * 2 * math.pi),
-                ) *
-                10,
-      );
-    }
-
-    path.lineTo(width, height);
-    path.lineTo(0, height);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(WavePainter oldDelegate) => true;
 }

@@ -1,8 +1,6 @@
 part of 'widget.dart';
 
-class EQLazyStackController extends Listenable with WidgetsBindingObserver {
-  final List<VoidCallback> _listeners = [];
-
+class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   int _currentIndex;
   final int maxCachedPages;
   final List<int> preloadIndexes;
@@ -12,7 +10,7 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
 
   final LinkedHashMap<int, bool> _loadedPages = LinkedHashMap<int, bool>();
 
-  EQLazyStackController({
+  LazyStackController({
     int initialIndex = 0,
     this.preloadIndexes = const [],
     this.disposeUnused = false,
@@ -30,23 +28,6 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     }
   }
 
-  // Listenable implementation
-  @override
-  void addListener(VoidCallback listener) {
-    _listeners.add(listener);
-  }
-
-  @override
-  void removeListener(VoidCallback listener) {
-    _listeners.remove(listener);
-  }
-
-  void _notifyListeners() {
-    for (final listener in List<VoidCallback>.from(_listeners)) {
-      listener();
-    }
-  }
-
   Set<int> get loadedIndexes => _loadedPages.keys.toSet();
   int get currentIndex => _currentIndex;
   bool get canGoBack => _currentIndex > 0;
@@ -55,23 +36,24 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
   // Memory pressure handler
   @override
   void didHaveMemoryPressure() {
-    _removeSpecifiedIndexes();
+    _flushMemoryCache();
   }
 
-  void _removeSpecifiedIndexes() {
+  void _flushMemoryCache() {
     bool changed = false;
     final protectedIndexes = {_currentIndex, ...preloadIndexes};
 
-    for (final index in removableIndexes) {
-      if (!protectedIndexes.contains(index) &&
-          _loadedPages.containsKey(index)) {
+    // Aggressively drop all inactive pages on memory pressure
+    final iterator = _loadedPages.keys.toList();
+    for (final index in iterator) {
+      if (!protectedIndexes.contains(index)) {
         _loadedPages.remove(index);
         changed = true;
       }
     }
 
     if (changed) {
-      _notifyListeners();
+      notifyListeners();
     }
   }
 
@@ -87,20 +69,20 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
   void switchTo(
     int index,
     int totalPages,
-    //{bool notify = true}
   ) {
-    // if (index < 0 || index >= totalPages || index == _currentIndex) return;
+    if (index == _currentIndex) return;
 
     _currentIndex = index;
     _markAsUsed(index);
-    _notifyListeners();
 
+    // Sync enforcement of memory size instead of double-rendering via post-frame
     if (disposeUnused) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _enforceMaxSize();
-        _notifyListeners();
-      });
+      _flushMemoryCache();
+    } else {
+      _enforceMaxSize();
     }
+
+    notifyListeners();
   }
 
   void _enforceMaxSize() {
@@ -129,7 +111,7 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     for (final index in preloadIndexes) {
       _markAsUsed(index);
     }
-    _notifyListeners();
+    notifyListeners();
   }
 
   void disposePage(int index) {
@@ -138,7 +120,7 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     }
 
     if (_loadedPages.remove(index) != null) {
-      _notifyListeners();
+      notifyListeners();
     }
   }
 
@@ -154,7 +136,7 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     }
 
     if (changed) {
-      _notifyListeners();
+      notifyListeners();
     }
   }
 
@@ -164,7 +146,7 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     }
 
     _markAsUsed(index);
-    _notifyListeners();
+    notifyListeners();
   }
 
   void preloadAdjacentPages(int totalPages, [int range = 1]) {
@@ -186,15 +168,16 @@ class EQLazyStackController extends Listenable with WidgetsBindingObserver {
     }
 
     if (changed) {
-      _notifyListeners();
+      notifyListeners();
     }
   }
 
+  @override
   void dispose() {
     _loadedPages.clear();
-    _listeners.clear();
     if (isListenMemoryPressure) {
       WidgetsBinding.instance.removeObserver(this);
     }
+    super.dispose();
   }
 }
