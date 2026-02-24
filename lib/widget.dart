@@ -37,7 +37,7 @@ class LazyLoadIndexedStack extends StatefulWidget {
 
 class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
+  AnimationController? _animController;
   int _previousIndex = -1;
   int _currentIndex = 0;
   bool _isForward = true;
@@ -47,12 +47,20 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     super.initState();
     _currentIndex = widget.controller.currentIndex;
     _previousIndex = _currentIndex;
-    _animController = AnimationController(
-      vsync: this,
-      duration: widget.animationDuration,
-      value: 1.0,
-    );
+
+    _setupAnimationControllerIfNeeded();
+
     widget.controller.addListener(_onControllerChanged);
+  }
+
+  void _setupAnimationControllerIfNeeded() {
+    if (widget.animation != IndexdAnimationType.none) {
+      _animController = AnimationController(
+        vsync: this,
+        duration: widget.animationDuration,
+        value: 1.0,
+      );
+    }
   }
 
   @override
@@ -62,8 +70,20 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       oldWidget.controller.removeListener(_onControllerChanged);
       widget.controller.addListener(_onControllerChanged);
     }
-    if (oldWidget.animationDuration != widget.animationDuration) {
-      _animController.duration = widget.animationDuration;
+
+    // Handle dynamic toggling between animated and non-animated types
+    if (oldWidget.animation != widget.animation) {
+      if (widget.animation == IndexdAnimationType.none) {
+        _animController?.dispose();
+        _animController = null;
+      } else if (_animController == null) {
+        _setupAnimationControllerIfNeeded();
+      }
+    }
+
+    if (oldWidget.animationDuration != widget.animationDuration &&
+        _animController != null) {
+      _animController!.duration = widget.animationDuration;
     }
   }
 
@@ -77,10 +97,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           _isForward = newIndex > _previousIndex;
         });
 
-        if (widget.animation != IndexdAnimationType.none) {
-          _animController.forward(from: 0.0);
-        } else {
-          _animController.value = 1.0;
+        if (widget.animation != IndexdAnimationType.none &&
+            _animController != null) {
+          _animController!.forward(from: 0.0);
         }
       }
     } else {
@@ -92,7 +111,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
-    _animController.dispose();
+    _animController?.dispose();
     super.dispose();
   }
 
@@ -107,10 +126,20 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     for (final i in loadedIndexes) {
       if (i < widget.children.length) {
         final isIncoming = i == _currentIndex;
-        final isOutgoing = i == _previousIndex;
 
-        // Disable tickers for background tabs, but keep exiting ones ticking during the animation
-        final isAnimating = _animController.isAnimating;
+        // Zero-overhead path: No animations at all
+        if (widget.animation == IndexdAnimationType.none ||
+            _animController == null) {
+          visibleChildren[i] = TickerMode(
+            enabled: isIncoming,
+            child: widget.children[i],
+          );
+          continue;
+        }
+
+        // Animated path
+        final isOutgoing = i == _previousIndex;
+        final isAnimating = _animController!.isAnimating;
         final isEnabled = isIncoming || (isOutgoing && isAnimating);
 
         Widget child = TickerMode(
@@ -118,9 +147,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           child: widget.children[i],
         );
 
-        if (widget.animation != IndexdAnimationType.none && isEnabled) {
+        if (isEnabled) {
           child = AnimatedBuilder(
-            animation: _animController,
+            animation: _animController!,
             builder: (context, child) {
               return _buildTransition(child!, isIncoming);
             },
@@ -134,7 +163,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
     return _LazyRenderStack(
       index: _currentIndex,
-      previousIndex: _animController.isAnimating ? _previousIndex : -1,
+      previousIndex:
+          (_animController?.isAnimating ?? false) ? _previousIndex : -1,
       alignment: widget.alignment,
       textDirection: widget.textDirection ?? Directionality.maybeOf(context),
       children: visibleChildren,
@@ -145,22 +175,21 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     switch (widget.animation) {
       case IndexdAnimationType.fade:
         return FadeTransition(
-          opacity:
-              isIncoming ? _animController : ReverseAnimation(_animController),
+          opacity: isIncoming
+              ? _animController!
+              : ReverseAnimation(_animController!),
           child: child,
         );
 
       case IndexdAnimationType.fadeThrough:
-        // Exiting fades out over first 35%, incoming fades in over last 65%
-        // Incoming also scales from 0.92 to 1.0
         if (isIncoming) {
           final fade = CurvedAnimation(
-            parent: _animController,
+            parent: _animController!,
             curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
           );
           final scale = Tween<double>(begin: 0.92, end: 1.0).animate(
             CurvedAnimation(
-              parent: _animController,
+              parent: _animController!,
               curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
             ),
           );
@@ -171,7 +200,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         } else {
           final fade = 1.0 -
               CurvedAnimation(
-                parent: _animController,
+                parent: _animController!,
                 curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
               ).value;
           return Opacity(
@@ -188,7 +217,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
         if (isIncoming) {
           final fade = CurvedAnimation(
-            parent: _animController,
+            parent: _animController!,
             curve: const Interval(0.3, 1.0, curve: Curves.easeIn),
           );
           final slide = Tween<Offset>(
@@ -196,7 +225,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
                 isHorizontal ? Offset(sign * 0.15, 0) : Offset(0, sign * 0.15),
             end: Offset.zero,
           ).animate(CurvedAnimation(
-            parent: _animController,
+            parent: _animController!,
             curve: Curves.fastOutSlowIn,
           ));
           return FadeTransition(
@@ -206,7 +235,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         } else {
           final fade = 1.0 -
               CurvedAnimation(
-                parent: _animController,
+                parent: _animController!,
                 curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
               ).value;
           final slide = Tween<Offset>(
@@ -215,7 +244,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
                 ? Offset(-sign * 0.15, 0)
                 : Offset(0, -sign * 0.15),
           ).animate(CurvedAnimation(
-            parent: _animController,
+            parent: _animController!,
             curve: Curves.fastOutSlowIn,
           ));
           return Opacity(
