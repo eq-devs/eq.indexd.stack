@@ -1,57 +1,48 @@
-# Indexed Stack
+# indexd_stack_dev
 
-A high-performance lazy-loading `IndexedStack` implementation for Flutter that initializes pages only when they are needed. Perfect for bottom navigation, tab views, and any UI that requires switching between multiple views.
+A high-performance lazy-loading `IndexedStack` for Flutter with a custom `RenderObject` pipeline and native tab transitions. Pages are initialized only when accessed, and inactive tabs consume **zero layout or paint resources**.
 
 ## Features
 
-- 🚀 **Lazy Loading**: Pages are only initialized when they're accessed, reducing memory usage and startup time
-- ⚡ **Preloading**: Optional preloading of specific pages during initialization
-- 💾 **State Preservation**: Configure which pages should maintain their state when not visible
-- 🧹 **Memory Efficiency**: Configurable memory management that automatically disposes unused pages
-- 🔄 **TickerMode Support**: Automatically disables animations in inactive pages
-- 🎮 **Full Control**: Explicit methods to preload or dispose specific pages
+- 🚀 **Custom RenderObject**: Only the active child participates in layout — inactive cached pages are completely skipped
+- ⚡ **Native Animations**: Fade, FadeThrough, SharedAxis transitions built without external dependencies
+- 💾 **LRU Cache**: Configurable `maxCachedPages` with automatic least-recently-used eviction
+- 🧹 **Memory Pressure**: Automatic cache flush on OS memory warnings via `WidgetsBindingObserver`
+- 🔄 **TickerMode**: Animations in background tabs are automatically paused
+- 🎯 **Zero Overhead**: When `animation: IndexdAnimationType.none`, no `AnimationController` is allocated
 
 ## Installation
 
-Add this to your package's `pubspec.yaml` file:
-
 ```yaml
 dependencies:
-  eq_indexed_stack: ^0.0.81
+  indexd_stack_dev: ^1.0.0
 ```
-
-Then run:
 
 ```bash
 flutter pub get
 ```
 
-## Usage
-
-### Basic Example
+## Quick Start
 
 ```dart
-import 'package:flutter/material.dart';
-import 'package:eq_indexed_stack/eq_indexed_stack.dart';
+import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
-class IndexedStackDemo extends StatefulWidget {
+class MyApp extends StatefulWidget {
   @override
-  _IndexedStackDemoState createState() => _IndexedStackDemoState();
+  State<MyApp> createState() => _MyAppState();
 }
 
-class _IndexedStackDemoState extends State<IndexedStackDemo> {
+class _MyAppState extends State<MyApp> {
   late LazyStackController controller;
   
   @override
   void initState() {
     super.initState();
-    
-    // Initialize controller with options
     controller = LazyStackController(
       initialIndex: 0,
-      preloadIndexes: [1], // Preload second page
-      disposeUnused: true,
       maxCachedPages: 3,
+      disposeUnused: true,
+      isListenMemoryPressure: true,
     );
   }
   
@@ -64,9 +55,9 @@ class _IndexedStackDemoState extends State<IndexedStackDemo> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Indexed Stack Demo')),
       body: LazyLoadIndexedStack(
         controller: controller,
+        animation: IndexdAnimationType.fadeThrough, // or .none for zero overhead
         children: [
           HomePage(),
           ProfilePage(),
@@ -76,7 +67,7 @@ class _IndexedStackDemoState extends State<IndexedStackDemo> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: controller.currentIndex,
         onTap: (index) => controller.switchTo(index, 3),
-        items: [
+        items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
@@ -87,132 +78,83 @@ class _IndexedStackDemoState extends State<IndexedStackDemo> {
 }
 ```
 
-### Advanced Usage
+## Animations
 
-#### Multiple Stack Instances
-
-You can use multiple LazyLoadIndexedStack instances with different controllers:
+Pass `IndexdAnimationType` to control tab transitions:
 
 ```dart
-// Main navigation controller
-final mainController = LazyStackController(
-  initialIndex: 0,
-  disposeUnused: true,
-);
-
-// Nested controller inside one of the main pages
-final nestedController = LazyStackController(
-  initialIndex: 0,
-  maxCachedPages: 2,
-);
-
-// Use in widget tree
 LazyLoadIndexedStack(
-  controller: mainController,
-  children: [
-    HomePage(),
-    LazyLoadIndexedStack(
-      controller: nestedController,
-      children: [
-        SubPage1(),
-        SubPage2(),
-      ],
-    ),
-    SettingsPage(),
-  ],
-);
+  controller: controller,
+  animation: IndexdAnimationType.sharedAxisHorizontal,
+  animationDuration: const Duration(milliseconds: 300),
+  children: [...],
+)
 ```
 
-#### Force Cleanup
+| Type | Description |
+|---|---|
+| `none` | Instant switch, zero allocation (default) |
+| `fade` | Simple crossfade |
+| `fadeThrough` | Material Design fade through (scale + fade) |
+| `sharedAxisHorizontal` | Slide + fade on the X axis |
+| `sharedAxisVertical` | Slide + fade on the Y axis |
 
-You can manually manage page disposal:
+Animation type can be changed dynamically at runtime. Switching to `none` immediately disposes the `AnimationController`.
 
-```dart
-// Reset controller to clean up all pages except the current one and preloaded pages
-controller.reset();
-
-// Dispose a specific page
-controller.disposePage(2);
-
-// Dispose multiple pages at once
-controller.disposePages([1, 3, 4]);
-
-// Switch pages with possible automatic cleanup (if disposeUnused is true)
-controller.switchTo(newIndex, totalPages);
-```
-
-#### Debugging Memory Usage
-
-Track which pages are kept in memory:
-
-```dart
-// Check if a specific page is loaded
-bool isPageLoaded = controller.isLoaded(2);
-
-// Get all currently loaded page indexes
-Set<int> loadedPages = controller.loadedIndexes;
-```
-
-## How It Works
-
-Under the hood, `eq_indexed_stack` uses a combination of optimized techniques:
-
-1. **Efficient State Management**: Only loaded pages are included in the render tree
-2. **Offstage + TickerMode**: Hidden pages use Offstage and TickerMode to minimize resource usage
-3. **Smart Page Management**: Automatically tracks and manages page history for optimal memory cleanup
-4. **Direct Listenable Implementation**: Uses minimal overhead for reactivity
-
-This creates a high-performance stack that:
-- Reduces initial load time
-- Minimizes memory consumption
-- Improves overall app responsiveness
-- Maintains state only where needed
-
-## Performance Tips
-
-To get the best performance:
-
-1. Set appropriate `maxCachedPages` based on your app's memory constraints
-2. Enable `disposeUnused` for apps with many heavy pages
-3. Use `preloadIndexes` for pages that users are likely to visit immediately
-4. Call `reset()` when navigation patterns change significantly
-5. Use `disposePage()` or `disposePages()` for explicit memory management
-
-## Complete API
+## API Reference
 
 ### LazyStackController
 
 ```dart
 LazyStackController({
-  int initialIndex = 0,           // Starting page index
-  List<int> preloadIndexes = [],  // Pages to preload on initialization
-  bool disposeUnused = false,     // Whether to dispose pages exceeding maxCachedPages
-  int maxCachedPages = 3,         // Maximum number of pages to keep in memory
+  int initialIndex = 0,
+  List<int> preloadIndexes = const [],
+  bool disposeUnused = false,
+  int maxCachedPages = 3,
+  bool isListenMemoryPressure = false,
 })
 ```
 
-**Properties:**
-- `currentIndex`: Current visible page index
-- `loadedIndexes`: Set of indexes that are currently loaded
-- `isLoaded(int index)`: Check if a page is loaded
+| Property | Type | Description |
+|---|---|---|
+| `currentIndex` | `int` | Currently visible page |
+| `loadedIndexes` | `Set<int>` | Pages currently in memory |
+| `canGoBack` | `bool` | Whether current index > 0 |
 
-**Methods:**
-- `switchTo(int index, int totalPages)`: Switch to a specific page
-- `disposePage(int index)`: Dispose a specific page
-- `disposePages(List<int> indexes)`: Dispose multiple specific pages
-- `reset()`: Reset controller state, clearing all pages except current and preloaded
-- `dispose()`: Dispose controller resources
+| Method | Description |
+|---|---|
+| `switchTo(index, totalPages)` | Switch to a page with automatic cache management |
+| `disposePage(index)` | Remove a specific page from memory |
+| `disposePages(indexes)` | Remove multiple pages from memory |
+| `reset()` | Clear all pages except current and preloaded |
+| `preloadPage(index, totalPages)` | Eagerly load a page into cache |
+| `preloadAdjacentPages(totalPages, [range])` | Preload pages adjacent to current |
+| `isLoaded(index)` | Check if a page is in memory |
+| `didHaveMemoryPressure()` | Manually trigger memory flush |
 
 ### LazyLoadIndexedStack
 
 ```dart
 LazyLoadIndexedStack({
-  required LazyStackController controller, // Controller for the stack
-  required List<Widget> children,          // Pages to display
-  AlignmentGeometry alignment = AlignmentDirectional.topStart, // Alignment
-  StackFit sizing = StackFit.loose,        // How to size children
-  TextDirection? textDirection,            // Text direction for alignment
+  required LazyStackController controller,
+  required List<Widget> children,
+  IndexdAnimationType animation = IndexdAnimationType.none,
+  Duration animationDuration = const Duration(milliseconds: 300),
+  AlignmentGeometry alignment = AlignmentDirectional.topStart,
+  TextDirection? textDirection,
 })
+```
+
+## Architecture
+
+```
+LazyLoadIndexedStack (StatefulWidget)
+  └── AnimationController? (null when animation == none)
+  └── _LazyRenderStack (MultiChildRenderObjectWidget)
+       └── _RenderLazyStack (RenderBox)
+            ├── performLayout: only active + transitioning child
+            ├── paint: outgoing first, incoming on top
+            └── hitTest: only active child receives touches
 ```
 
 ## License

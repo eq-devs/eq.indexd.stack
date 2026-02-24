@@ -5,7 +5,6 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   final int maxCachedPages;
   final List<int> preloadIndexes;
   final bool disposeUnused;
-  final List<int> removableIndexes;
   final bool isListenMemoryPressure;
 
   final LinkedHashMap<int, bool> _loadedPages = LinkedHashMap<int, bool>();
@@ -15,7 +14,6 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     this.preloadIndexes = const [],
     this.disposeUnused = false,
     this.maxCachedPages = 3,
-    this.removableIndexes = const [],
     this.isListenMemoryPressure = false,
   }) : _currentIndex = initialIndex {
     _markAsUsed(initialIndex);
@@ -28,7 +26,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Set<int> get loadedIndexes => _loadedPages.keys.toSet();
+  Set<int> get loadedIndexes => Set<int>.unmodifiable(_loadedPages.keys);
   int get currentIndex => _currentIndex;
   bool get canGoBack => _currentIndex > 0;
   bool isLoaded(int index) => _loadedPages.containsKey(index);
@@ -75,11 +73,10 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = index;
     _markAsUsed(index);
 
-    // Sync enforcement of memory size instead of double-rendering via post-frame
+    // _markAsUsed already calls _enforceMaxSize internally.
+    // Only flush aggressively if disposeUnused is enabled.
     if (disposeUnused) {
       _flushMemoryCache();
-    } else {
-      _enforceMaxSize();
     }
 
     notifyListeners();

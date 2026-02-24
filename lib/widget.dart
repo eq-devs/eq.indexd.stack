@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -42,6 +41,13 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   int _currentIndex = 0;
   bool _isForward = true;
 
+  // Cached animation objects — created once per transition, NOT per frame
+  CurvedAnimation? _inFade;
+  CurvedAnimation? _outFade;
+  CurvedAnimation? _inScale;
+  Animation<Offset>? _inSlide;
+  Animation<Offset>? _outSlide;
+
   @override
   void initState() {
     super.initState();
@@ -74,6 +80,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     // Handle dynamic toggling between animated and non-animated types
     if (oldWidget.animation != widget.animation) {
       if (widget.animation == IndexdAnimationType.none) {
+        _disposeCachedAnimations();
         _animController?.dispose();
         _animController = null;
       } else if (_animController == null) {
@@ -99,6 +106,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
         if (widget.animation != IndexdAnimationType.none &&
             _animController != null) {
+          _buildCachedAnimations();
           _animController!.forward(from: 0.0);
         }
       }
@@ -108,9 +116,81 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     }
   }
 
+  /// Create all the CurvedAnimations and Tweens once per transition.
+  void _buildCachedAnimations() {
+    _disposeCachedAnimations();
+    final ac = _animController!;
+
+    switch (widget.animation) {
+      case IndexdAnimationType.fade:
+        // No cached objects needed — we use ac directly
+        break;
+
+      case IndexdAnimationType.fadeThrough:
+        _inFade = CurvedAnimation(
+          parent: ac,
+          curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
+        );
+        _outFade = CurvedAnimation(
+          parent: ac,
+          curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
+        );
+        _inScale = CurvedAnimation(
+          parent: ac,
+          curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
+        );
+        break;
+
+      case IndexdAnimationType.sharedAxisHorizontal:
+      case IndexdAnimationType.sharedAxisVertical:
+        final bool isHorizontal =
+            widget.animation == IndexdAnimationType.sharedAxisHorizontal;
+        final double sign = _isForward ? 1.0 : -1.0;
+
+        _inFade = CurvedAnimation(
+          parent: ac,
+          curve: const Interval(0.3, 1.0, curve: Curves.easeIn),
+        );
+        _outFade = CurvedAnimation(
+          parent: ac,
+          curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
+        );
+        _inSlide = Tween<Offset>(
+          begin: isHorizontal ? Offset(sign * 0.15, 0) : Offset(0, sign * 0.15),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
+          parent: ac,
+          curve: Curves.fastOutSlowIn,
+        ));
+        _outSlide = Tween<Offset>(
+          begin: Offset.zero,
+          end: isHorizontal ? Offset(-sign * 0.15, 0) : Offset(0, -sign * 0.15),
+        ).animate(CurvedAnimation(
+          parent: ac,
+          curve: Curves.fastOutSlowIn,
+        ));
+        break;
+
+      case IndexdAnimationType.none:
+        break;
+    }
+  }
+
+  void _disposeCachedAnimations() {
+    _inFade?.dispose();
+    _outFade?.dispose();
+    _inScale?.dispose();
+    _inFade = null;
+    _outFade = null;
+    _inScale = null;
+    _inSlide = null;
+    _outSlide = null;
+  }
+
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
+    _disposeCachedAnimations();
     _animController?.dispose();
     super.dispose();
   }
@@ -183,26 +263,14 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
       case IndexdAnimationType.fadeThrough:
         if (isIncoming) {
-          final fade = CurvedAnimation(
-            parent: _animController!,
-            curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
-          );
-          final scale = Tween<double>(begin: 0.92, end: 1.0).animate(
-            CurvedAnimation(
-              parent: _animController!,
-              curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
-            ),
-          );
+          final scaleAnim = Tween<double>(begin: 0.92, end: 1.0)
+              .animate(_inScale ?? _animController!);
           return FadeTransition(
-            opacity: fade,
-            child: ScaleTransition(scale: scale, child: child),
+            opacity: _inFade ?? _animController!,
+            child: ScaleTransition(scale: scaleAnim, child: child),
           );
         } else {
-          final fade = 1.0 -
-              CurvedAnimation(
-                parent: _animController!,
-                curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
-              ).value;
+          final fade = 1.0 - (_outFade?.value ?? _animController!.value);
           return Opacity(
             opacity: fade.clamp(0.0, 1.0),
             child: child,
@@ -211,45 +279,22 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
       case IndexdAnimationType.sharedAxisHorizontal:
       case IndexdAnimationType.sharedAxisVertical:
-        final bool isHorizontal =
-            widget.animation == IndexdAnimationType.sharedAxisHorizontal;
-        final double sign = _isForward ? 1.0 : -1.0;
-
         if (isIncoming) {
-          final fade = CurvedAnimation(
-            parent: _animController!,
-            curve: const Interval(0.3, 1.0, curve: Curves.easeIn),
-          );
-          final slide = Tween<Offset>(
-            begin:
-                isHorizontal ? Offset(sign * 0.15, 0) : Offset(0, sign * 0.15),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: _animController!,
-            curve: Curves.fastOutSlowIn,
-          ));
           return FadeTransition(
-            opacity: fade,
-            child: SlideTransition(position: slide, child: child),
+            opacity: _inFade ?? _animController!,
+            child: SlideTransition(
+              position: _inSlide ?? const AlwaysStoppedAnimation(Offset.zero),
+              child: child,
+            ),
           );
         } else {
-          final fade = 1.0 -
-              CurvedAnimation(
-                parent: _animController!,
-                curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
-              ).value;
-          final slide = Tween<Offset>(
-            begin: Offset.zero,
-            end: isHorizontal
-                ? Offset(-sign * 0.15, 0)
-                : Offset(0, -sign * 0.15),
-          ).animate(CurvedAnimation(
-            parent: _animController!,
-            curve: Curves.fastOutSlowIn,
-          ));
+          final fade = 1.0 - (_outFade?.value ?? _animController!.value);
           return Opacity(
             opacity: fade.clamp(0.0, 1.0),
-            child: SlideTransition(position: slide, child: child),
+            child: SlideTransition(
+              position: _outSlide ?? const AlwaysStoppedAnimation(Offset.zero),
+              child: child,
+            ),
           );
         }
 
@@ -388,11 +433,12 @@ class _RenderLazyStack extends RenderBox
 
     if (previousChild != null && previousChild != activeChild) {
       previousChild.layout(constraints, parentUsesSize: true);
-      if (previousChild.size.width > maxSize.width ||
-          previousChild.size.height > maxSize.height) {
+      final pw = previousChild.size.width;
+      final ph = previousChild.size.height;
+      if (pw > maxSize.width || ph > maxSize.height) {
         maxSize = Size(
-          math.max(maxSize.width, previousChild.size.width),
-          math.max(maxSize.height, previousChild.size.height),
+          pw > maxSize.width ? pw : maxSize.width,
+          ph > maxSize.height ? ph : maxSize.height,
         );
       }
     }

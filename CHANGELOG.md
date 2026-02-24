@@ -16,8 +16,35 @@
 ## 0.0.8
 # refactor: improved memory management and lazy loading
 
-
 ## 0.0.9
-# chore: update version to 0.0.81 and modify switchTo method in LazyStackController
 # chore: rename package to indexd_stack_dev
 
+## 1.0.0
+
+### ⚡ Performance (Breaking)
+- **Custom RenderObject**: Replaced Flutter's native `IndexedStack` with a custom `_RenderLazyStack` that skips layout computation entirely for inactive children. Only the active child participates in layout/paint.
+- **Cached Animations**: All `CurvedAnimation` and `Tween` objects are now created once per transition and cached as state fields — zero per-frame allocations.
+- **Optimized `loadedIndexes`**: Returns `Set<int>.unmodifiable()` instead of allocating a new `Set` on every access.
+- **Eliminated double eviction**: `switchTo` no longer calls `_enforceMaxSize` twice.
+- **Removed `dart:math` dependency**: Inlined max comparisons.
+
+### ✨ Features
+- **Native Tab Animations**: Added `IndexdAnimationType` enum with 5 transition styles:
+  - `none` (zero-overhead, no AnimationController allocated)
+  - `fade`
+  - `fadeThrough` (Material Design spec)
+  - `sharedAxisHorizontal`
+  - `sharedAxisVertical`
+- **Dynamic Animation Toggling**: Switching between `none` and animated types at runtime is fully supported with proper resource lifecycle management.
+- **Nullable AnimationController**: When `animation: IndexdAnimationType.none`, no `AnimationController` is created — true zero allocation.
+
+### 🔧 Breaking Changes
+- **Removed `EQ` prefix**: `EQLazyStackController` → `LazyStackController`, `EQLazyLoadIndexedStack` → `LazyLoadIndexedStack`.
+- **Removed `removableIndexes`**: Dead field that was never used internally.
+- **Changed base class**: `LazyLoadIndexedStack` is now a `StatefulWidget` (was `ListenableBuilder`).
+- **Removed `StackFit sizing` parameter**: The custom RenderObject handles sizing internally.
+
+### 🐛 Fixes
+- Controller now uses `ChangeNotifier` instead of manual listener management.
+- `switchTo` performs synchronous eviction before `notifyListeners()` — no double-frame builds.
+- Memory pressure handler (`didHaveMemoryPressure`) aggressively flushes all inactive pages.
