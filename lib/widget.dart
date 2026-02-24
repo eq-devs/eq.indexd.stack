@@ -9,7 +9,7 @@ enum IndexdAnimationType {
   fade,
   fadeThrough,
   sharedAxisHorizontal,
-  sharedAxisVertical,
+  sharedAxisVertical
 }
 
 @immutable
