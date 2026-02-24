@@ -1,4 +1,4 @@
-## 0.1.2
+## 0.1.3
 
 ### ⚡ Performance & Fixes
 - **Strict Widget Tree Stabilization**: Fixed the critical bug where tabs would rebuild on every switch. The `AnimatedBuilder` wrapper depth is now perfectly stable across all `IndexdAnimationType` transitions, ensuring Flutter never unmounts the page element.
