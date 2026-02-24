@@ -15,7 +15,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 
 ```yaml
 dependencies:
-  indexd_stack_dev: ^1.0.0
+  indexd_stack_dev: ^0.1.0
 ```
 
 ```bash

@@ -19,7 +19,7 @@
 ## 0.0.9
 # chore: rename package to indexd_stack_dev
 
-## 1.0.0
+## 0.1.0
 
 ### ⚡ Performance (Breaking)
 - **Custom RenderObject**: Replaced Flutter's native `IndexedStack` with a custom `_RenderLazyStack` that skips layout computation entirely for inactive children. Only the active child participates in layout/paint.
