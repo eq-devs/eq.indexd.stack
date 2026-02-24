@@ -35,6 +35,7 @@ class LazyStackHomePage extends StatefulWidget {
 class _LazyStackHomePageState extends State<LazyStackHomePage> {
   late LazyStackController mainController;
   final List<String> memoryLogs = [];
+  IndexdAnimationType _currentAnimation = IndexdAnimationType.fadeThrough;
 
   @override
   void initState() {
@@ -86,6 +87,7 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
       ),
       body: LazyLoadIndexedStack(
         controller: mainController,
+        animation: _currentAnimation,
         children: [
           HeavyFeedPage(onAction: () => _logMemory("Feed list scrolled/acted")),
           ExploreGridPage(onLoad: () => _logMemory("Explore grid loaded")),
@@ -94,6 +96,11 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
           ),
           SettingsSimulatorPage(
             controller: mainController,
+            currentAnimation: _currentAnimation,
+            onAnimationChanged: (anim) {
+              setState(() => _currentAnimation = anim);
+              _logMemory("Animation changed to ${anim.name}");
+            },
             onSettingsChanged: (msg) => _logMemory(msg),
           ),
         ],
@@ -473,11 +480,15 @@ class _PremiumProfilePageState extends State<PremiumProfilePage> {
 
 class SettingsSimulatorPage extends StatelessWidget {
   final LazyStackController controller;
+  final IndexdAnimationType currentAnimation;
+  final Function(IndexdAnimationType) onAnimationChanged;
   final Function(String) onSettingsChanged;
 
   const SettingsSimulatorPage({
     super.key,
     required this.controller,
+    required this.currentAnimation,
+    required this.onAnimationChanged,
     required this.onSettingsChanged,
   });
 
@@ -528,6 +539,38 @@ class SettingsSimulatorPage extends StatelessWidget {
               onSettingsChanged("SIMULATED MEMORY PRESSURE - Cleared Cache");
             },
             child: const Text('Flush', style: TextStyle(color: Colors.white)),
+          ),
+        ),
+        const Divider(color: Colors.white24, height: 32),
+        const Text(
+          'Transitions',
+          style: TextStyle(
+            color: Colors.deepPurpleAccent,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ListTile(
+          title: const Text(
+            'Animation Style',
+            style: TextStyle(color: Colors.white),
+          ),
+          subtitle: const Text(
+            'Native RenderBox transitions',
+            style: TextStyle(color: Colors.white54),
+          ),
+          trailing: DropdownButton<IndexdAnimationType>(
+            value: currentAnimation,
+            dropdownColor: const Color(0xFF2A2A2A),
+            style: const TextStyle(color: Colors.deepPurpleAccent),
+            underline: const SizedBox(),
+            items: IndexdAnimationType.values.map((anim) {
+              return DropdownMenuItem(value: anim, child: Text(anim.name));
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) onAnimationChanged(val);
+            },
           ),
         ),
         const Divider(color: Colors.white24, height: 32),

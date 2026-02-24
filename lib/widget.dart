@@ -1,47 +1,233 @@
 import 'dart:collection';
+import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 part 'util.dart';
 
-class LazyLoadIndexedStack extends ListenableBuilder {
+enum IndexdAnimationType {
+  none,
+  fade,
+  fadeThrough,
+  sharedAxisHorizontal,
+  sharedAxisVertical,
+}
+
+class LazyLoadIndexedStack extends StatefulWidget {
   final List<Widget> children;
   final LazyStackController controller;
   final AlignmentGeometry alignment;
   final TextDirection? textDirection;
+  final IndexdAnimationType animation;
+  final Duration animationDuration;
 
-  LazyLoadIndexedStack({
+  const LazyLoadIndexedStack({
     super.key,
     required this.controller,
     required this.children,
     this.alignment = AlignmentDirectional.topStart,
     this.textDirection,
-  }) : super(
-          listenable: controller,
-          builder: (context, _) {
-            final currentIndex = controller.currentIndex;
-            final loadedIndexes = controller.loadedIndexes;
-            final visibleChildren =
-                List<Widget>.filled(children.length, const SizedBox.shrink());
+    this.animation = IndexdAnimationType.none,
+    this.animationDuration = const Duration(milliseconds: 300),
+  });
 
-            for (final i in loadedIndexes) {
-              if (i < children.length) {
-                // TickerMode pauses animations for inactive tabs
-                visibleChildren[i] = TickerMode(
-                  enabled: i == currentIndex,
-                  child: children[i],
-                );
-              }
-            }
+  @override
+  State<LazyLoadIndexedStack> createState() => _LazyLoadIndexedStackState();
+}
 
-            return _LazyRenderStack(
-              index: currentIndex,
-              alignment: alignment,
-              textDirection: textDirection ?? Directionality.maybeOf(context),
-              children: visibleChildren,
-            );
-          },
+class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  int _previousIndex = -1;
+  int _currentIndex = 0;
+  bool _isForward = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.controller.currentIndex;
+    _previousIndex = _currentIndex;
+    _animController = AnimationController(
+      vsync: this,
+      duration: widget.animationDuration,
+      value: 1.0,
+    );
+    widget.controller.addListener(_onControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant LazyLoadIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+    }
+    if (oldWidget.animationDuration != widget.animationDuration) {
+      _animController.duration = widget.animationDuration;
+    }
+  }
+
+  void _onControllerChanged() {
+    final newIndex = widget.controller.currentIndex;
+    if (newIndex != _currentIndex) {
+      if (mounted) {
+        setState(() {
+          _previousIndex = _currentIndex;
+          _currentIndex = newIndex;
+          _isForward = newIndex > _previousIndex;
+        });
+
+        if (widget.animation != IndexdAnimationType.none) {
+          _animController.forward(from: 0.0);
+        } else {
+          _animController.value = 1.0;
+        }
+      }
+    } else {
+      // Just rebuild for cache/loaded changes without animating
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    _animController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loadedIndexes = widget.controller.loadedIndexes;
+    final visibleChildren = List<Widget>.filled(
+      widget.children.length,
+      const SizedBox.shrink(),
+    );
+
+    for (final i in loadedIndexes) {
+      if (i < widget.children.length) {
+        final isIncoming = i == _currentIndex;
+        final isOutgoing = i == _previousIndex;
+
+        // Disable tickers for background tabs, but keep exiting ones ticking during the animation
+        final isAnimating = _animController.isAnimating;
+        final isEnabled = isIncoming || (isOutgoing && isAnimating);
+
+        Widget child = TickerMode(
+          enabled: isEnabled,
+          child: widget.children[i],
         );
+
+        if (widget.animation != IndexdAnimationType.none && isEnabled) {
+          child = AnimatedBuilder(
+            animation: _animController,
+            builder: (context, child) {
+              return _buildTransition(child!, isIncoming);
+            },
+            child: child,
+          );
+        }
+
+        visibleChildren[i] = child;
+      }
+    }
+
+    return _LazyRenderStack(
+      index: _currentIndex,
+      previousIndex: _animController.isAnimating ? _previousIndex : -1,
+      alignment: widget.alignment,
+      textDirection: widget.textDirection ?? Directionality.maybeOf(context),
+      children: visibleChildren,
+    );
+  }
+
+  Widget _buildTransition(Widget child, bool isIncoming) {
+    switch (widget.animation) {
+      case IndexdAnimationType.fade:
+        return FadeTransition(
+          opacity:
+              isIncoming ? _animController : ReverseAnimation(_animController),
+          child: child,
+        );
+
+      case IndexdAnimationType.fadeThrough:
+        // Exiting fades out over first 35%, incoming fades in over last 65%
+        // Incoming also scales from 0.92 to 1.0
+        if (isIncoming) {
+          final fade = CurvedAnimation(
+            parent: _animController,
+            curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
+          );
+          final scale = Tween<double>(begin: 0.92, end: 1.0).animate(
+            CurvedAnimation(
+              parent: _animController,
+              curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
+            ),
+          );
+          return FadeTransition(
+            opacity: fade,
+            child: ScaleTransition(scale: scale, child: child),
+          );
+        } else {
+          final fade = 1.0 -
+              CurvedAnimation(
+                parent: _animController,
+                curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
+              ).value;
+          return Opacity(
+            opacity: fade.clamp(0.0, 1.0),
+            child: child,
+          );
+        }
+
+      case IndexdAnimationType.sharedAxisHorizontal:
+      case IndexdAnimationType.sharedAxisVertical:
+        final bool isHorizontal =
+            widget.animation == IndexdAnimationType.sharedAxisHorizontal;
+        final double sign = _isForward ? 1.0 : -1.0;
+
+        if (isIncoming) {
+          final fade = CurvedAnimation(
+            parent: _animController,
+            curve: const Interval(0.3, 1.0, curve: Curves.easeIn),
+          );
+          final slide = Tween<Offset>(
+            begin:
+                isHorizontal ? Offset(sign * 0.15, 0) : Offset(0, sign * 0.15),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: _animController,
+            curve: Curves.fastOutSlowIn,
+          ));
+          return FadeTransition(
+            opacity: fade,
+            child: SlideTransition(position: slide, child: child),
+          );
+        } else {
+          final fade = 1.0 -
+              CurvedAnimation(
+                parent: _animController,
+                curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
+              ).value;
+          final slide = Tween<Offset>(
+            begin: Offset.zero,
+            end: isHorizontal
+                ? Offset(-sign * 0.15, 0)
+                : Offset(0, -sign * 0.15),
+          ).animate(CurvedAnimation(
+            parent: _animController,
+            curve: Curves.fastOutSlowIn,
+          ));
+          return Opacity(
+            opacity: fade.clamp(0.0, 1.0),
+            child: SlideTransition(position: slide, child: child),
+          );
+        }
+
+      case IndexdAnimationType.none:
+        return child;
+    }
+  }
 }
 
 /// A highly optimized custom IndexedStack that bypasses layout computation
@@ -49,11 +235,13 @@ class LazyLoadIndexedStack extends ListenableBuilder {
 /// ALL children, but this specifically only lays out the actively viewed child.
 class _LazyRenderStack extends MultiChildRenderObjectWidget {
   final int index;
+  final int previousIndex;
   final AlignmentGeometry alignment;
   final TextDirection? textDirection;
 
   const _LazyRenderStack({
     required this.index,
+    required this.previousIndex,
     required this.alignment,
     this.textDirection,
     required super.children,
@@ -63,16 +251,17 @@ class _LazyRenderStack extends MultiChildRenderObjectWidget {
   RenderObject createRenderObject(BuildContext context) {
     return _RenderLazyStack(
       index: index,
+      previousIndex: previousIndex,
       alignment: alignment,
       textDirection: textDirection ?? Directionality.maybeOf(context),
     );
   }
 
   @override
-  void updateRenderObject(
-      BuildContext context, _RenderLazyStack renderObject) {
+  void updateRenderObject(BuildContext context, _RenderLazyStack renderObject) {
     renderObject
       ..index = index
+      ..previousIndex = previousIndex
       ..alignment = alignment
       ..textDirection = textDirection ?? Directionality.maybeOf(context);
   }
@@ -87,14 +276,17 @@ class _RenderLazyStack extends RenderBox
         ContainerRenderObjectMixin<RenderBox, _LazyStackParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _LazyStackParentData> {
   int _index;
+  int _previousIndex;
   AlignmentGeometry _alignment;
   TextDirection? _textDirection;
 
   _RenderLazyStack({
     required int index,
+    required int previousIndex,
     required AlignmentGeometry alignment,
     TextDirection? textDirection,
   })  : _index = index,
+        _previousIndex = previousIndex,
         _alignment = alignment,
         _textDirection = textDirection;
 
@@ -102,6 +294,13 @@ class _RenderLazyStack extends RenderBox
   set index(int value) {
     if (_index == value) return;
     _index = value;
+    markNeedsLayout();
+  }
+
+  int get previousIndex => _previousIndex;
+  set previousIndex(int value) {
+    if (_previousIndex == value) return;
+    _previousIndex = value;
     markNeedsLayout();
   }
 
@@ -126,11 +325,12 @@ class _RenderLazyStack extends RenderBox
     }
   }
 
-  RenderBox? get _activeChild {
+  RenderBox? _getChild(int targetIndex) {
+    if (targetIndex < 0) return null;
     int currentIndex = 0;
     RenderBox? child = firstChild;
     while (child != null) {
-      if (currentIndex == _index) {
+      if (currentIndex == targetIndex) {
         return child;
       }
       child = childAfter(child);
@@ -141,34 +341,56 @@ class _RenderLazyStack extends RenderBox
 
   @override
   void performLayout() {
-    final activeChild = _activeChild;
+    final activeChild = _getChild(_index);
+    final previousChild =
+        _previousIndex >= 0 ? _getChild(_previousIndex) : null;
 
-    if (activeChild == null) {
+    if (activeChild == null && previousChild == null) {
       size = constraints.biggest;
       return;
     }
 
-    // ONLY the active child is laid out.
-    // Native IndexedStack lays out EVERY child. We completely skip it here.
-    activeChild.layout(constraints, parentUsesSize: true);
+    Size maxSize = Size.zero;
 
-    // Determines the final size based on the single active child and constraints.
-    size = constraints.constrain(activeChild.size);
+    if (activeChild != null) {
+      activeChild.layout(constraints, parentUsesSize: true);
+      maxSize = activeChild.size;
+    }
 
-    // Apply alignment
+    if (previousChild != null && previousChild != activeChild) {
+      previousChild.layout(constraints, parentUsesSize: true);
+      if (previousChild.size.width > maxSize.width ||
+          previousChild.size.height > maxSize.height) {
+        maxSize = Size(
+          math.max(maxSize.width, previousChild.size.width),
+          math.max(maxSize.height, previousChild.size.height),
+        );
+      }
+    }
+
+    size = constraints.constrain(maxSize);
+
     final Alignment resolvedAlignment = alignment.resolve(textDirection);
-    final _LazyStackParentData childParentData =
-        activeChild.parentData! as _LazyStackParentData;
 
-    // Position using alignment relative to the chosen size.
-    childParentData.offset =
-        resolvedAlignment.alongOffset((size - activeChild.size) as Offset);
+    if (activeChild != null) {
+      final _LazyStackParentData activeData =
+          activeChild.parentData! as _LazyStackParentData;
+      activeData.offset =
+          resolvedAlignment.alongOffset((size - activeChild.size) as Offset);
+    }
+
+    if (previousChild != null && previousChild != activeChild) {
+      final _LazyStackParentData previousData =
+          previousChild.parentData! as _LazyStackParentData;
+      previousData.offset =
+          resolvedAlignment.alongOffset((size - previousChild.size) as Offset);
+    }
   }
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    // Only the active child receives gestures
-    final activeChild = _activeChild;
+    // Only the incoming/active child receives gestures
+    final activeChild = _getChild(_index);
     if (activeChild != null) {
       final _LazyStackParentData childParentData =
           activeChild.parentData! as _LazyStackParentData;
@@ -186,12 +408,22 @@ class _RenderLazyStack extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    // Native IndexedStack also only paints the active child, so we mirror that.
-    final activeChild = _activeChild;
+    final previousChild =
+        _previousIndex >= 0 ? _getChild(_previousIndex) : null;
+    final activeChild = _getChild(_index);
+
+    // Paint outgoing child first (bottom layer)
+    if (previousChild != null && previousChild != activeChild) {
+      final _LazyStackParentData previousData =
+          previousChild.parentData! as _LazyStackParentData;
+      context.paintChild(previousChild, previousData.offset + offset);
+    }
+
+    // Paint incoming child (top layer)
     if (activeChild != null) {
-      final _LazyStackParentData childParentData =
+      final _LazyStackParentData activeData =
           activeChild.parentData! as _LazyStackParentData;
-      context.paintChild(activeChild, childParentData.offset + offset);
+      context.paintChild(activeChild, activeData.offset + offset);
     }
   }
 }
