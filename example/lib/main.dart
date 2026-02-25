@@ -13,7 +13,7 @@ class ComplexLazyStackDemo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      showPerformanceOverlay: true,
+      // showPerformanceOverlay: true,
       title: 'Premium LazyStack Demo',
       theme: ThemeData(
         brightness: Brightness.dark,

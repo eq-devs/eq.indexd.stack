@@ -155,17 +155,17 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       case IndexdAnimationType.fadeThrough:
         _inFade = CurvedAnimation(
           parent: ac,
-          curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
+          curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
         );
         _outFade = CurvedAnimation(
           parent: ac,
-          curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
+          curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
         );
         _inScale = CurvedAnimation(
           parent: ac,
-          curve: const Interval(0.35, 1.0, curve: Curves.easeOutCubic),
+          curve: Curves.fastLinearToSlowEaseIn,
         );
-        _inScaleAnim = Tween<double>(begin: 0.92, end: 1.0).animate(_inScale!);
+        _inScaleAnim = Tween<double>(begin: 0.96, end: 1.0).animate(_inScale!);
         _outFadeReverse = ReverseAnimation(_outFade!);
         break;
 
@@ -177,25 +177,25 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
         _inFade = CurvedAnimation(
           parent: ac,
-          curve: const Interval(0.3, 1.0, curve: Curves.easeIn),
+          curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
         );
         _outFade = CurvedAnimation(
           parent: ac,
-          curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
+          curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
         );
         _inSlide = Tween<Offset>(
-          begin: isHorizontal ? Offset(sign * 0.15, 0) : Offset(0, sign * 0.15),
+          begin: isHorizontal ? Offset(sign * 0.08, 0) : Offset(0, sign * 0.08),
           end: Offset.zero,
         ).animate(CurvedAnimation(
           parent: ac,
-          curve: Curves.fastOutSlowIn,
+          curve: Curves.fastLinearToSlowEaseIn,
         ));
         _outSlide = Tween<Offset>(
           begin: Offset.zero,
-          end: isHorizontal ? Offset(-sign * 0.15, 0) : Offset(0, -sign * 0.15),
+          end: isHorizontal ? Offset(-sign * 0.08, 0) : Offset(0, -sign * 0.08),
         ).animate(CurvedAnimation(
           parent: ac,
-          curve: Curves.fastOutSlowIn,
+          curve: Curves.fastLinearToSlowEaseIn,
         ));
         _outFadeReverse = ReverseAnimation(_outFade!);
         break;
