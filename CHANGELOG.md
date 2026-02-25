@@ -1,3 +1,11 @@
+## 0.1.4
+
+### ✨ Updates & Cleanups
+- **Premium Animation Curves**: Upgraded the `Fade Through` and `Shared Axis` transition curves to `fastLinearToSlowEaseIn` for a much smoother, iOS/Material 3 style spring-damped feel.
+- **Optimized Transition Offsets**: Reduced the slide offset scale in Shared Axis transitions from 15% to 8% to create a more premium, subtle depth effect. 
+- **Smoother Cross-fades**: Fine-tuned opacity intervals for cross-fading, completely eliminating brief frame flashes during dark mode transitions.
+- **Codebase Polish**: Cleaned up all artificial comments and explanatory text for a pristine, production-ready source code.
+
 ## 0.1.3
 
 ### ⚡ Performance & Fixes

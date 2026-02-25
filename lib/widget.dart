@@ -42,11 +42,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   int _currentIndex = 0;
   bool _isForward = true;
 
-  // ValueNotifier triggers targeted rebuilds ONLY for the children composition
-  // instead of calling setState which rebuilds the entire build() method.
   final ValueNotifier<int> _buildVersion = ValueNotifier<int>(0);
 
-  // Cached animation objects — created once per transition, NOT per frame
   CurvedAnimation? _inFade;
   CurvedAnimation? _outFade;
   CurvedAnimation? _inScale;
@@ -54,11 +51,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   Animation<Offset>? _inSlide;
   Animation<Offset>? _outSlide;
 
-  // Derived reverse animations to prevent per-frame object allocation
   Animation<double>? _acReverse;
   Animation<double>? _outFadeReverse;
 
-  // Static inert animations for non-participating children
   static const kInertScale = AlwaysStoppedAnimation(1.0);
   static const kInertOpacity = AlwaysStoppedAnimation(1.0);
   static const kInertSlide = AlwaysStoppedAnimation(Offset.zero);
@@ -84,8 +79,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     }
   }
 
-  /// Rebuild once when animation completes to flip TickerMode off
-  /// for the outgoing child and switch it to AlwaysStoppedAnimation.
   void _onAnimationStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
       _buildVersion.value++;
@@ -100,7 +93,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       widget.controller.addListener(_onControllerChanged);
     }
 
-    // Handle dynamic toggling between animated and non-animated types
     if (oldWidget.animation != widget.animation) {
       if (widget.animation == IndexdAnimationType.none) {
         _disposeCachedAnimations();
@@ -132,17 +124,13 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           _animController!.forward(from: 0.0);
         }
 
-        // Targeted rebuild — only the ValueListenableBuilder subtree rebuilds,
-        // NOT the entire State.build().
         _buildVersion.value++;
       }
     } else {
-      // Just rebuild for cache/loaded changes without animating
       _buildVersion.value++;
     }
   }
 
-  /// Create all the CurvedAnimations and Tweens once per transition.
   void _buildCachedAnimations() {
     _disposeCachedAnimations();
     final ac = _animController!;
@@ -244,7 +232,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           if (i < widget.children.length) {
             final isIncoming = i == _currentIndex;
 
-            // Zero-overhead path: No animations at all
             if (widget.animation == IndexdAnimationType.none ||
                 _animController == null) {
               visibleChildren[i] = TickerMode(
@@ -254,11 +241,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
               continue;
             }
 
-            // Animated path — ALWAYS wrap with AnimatedBuilder to keep the
-            // widget tree structure stable across tab switches.
-            // Without this, the widget at position [i] changes TYPE from
-            // TickerMode → AnimatedBuilder(TickerMode), which forces Flutter
-            // to unmount and remount the child page (full rebuild).
             final isOutgoing = i == _previousIndex;
             final isAnimating = _animController!.isAnimating;
             final isParticipating = isIncoming || (isOutgoing && isAnimating);
@@ -268,8 +250,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
               child: widget.children[i],
             );
 
-            // Always wrap with AnimatedBuilder. Non-participating children
-            // use AlwaysStoppedAnimation which never ticks — zero frame cost.
             child = AnimatedBuilder(
               animation: isParticipating
                   ? _animController!
@@ -358,9 +338,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   }
 }
 
-/// A highly optimized custom IndexedStack that bypasses layout computation
-/// entirely for non-active background children. Native IndexedStack lays out
-/// ALL children, but this specifically only lays out the actively viewed child.
 class _LazyRenderStack extends MultiChildRenderObjectWidget {
   final int index;
   final int previousIndex;
@@ -395,9 +372,7 @@ class _LazyRenderStack extends MultiChildRenderObjectWidget {
   }
 }
 
-class _LazyStackParentData extends ContainerBoxParentData<RenderBox> {
-  // Allows the parent RenderObject to optionally track alignment manually if needed.
-}
+class _LazyStackParentData extends ContainerBoxParentData<RenderBox> {}
 
 class _RenderLazyStack extends RenderBox
     with
@@ -518,7 +493,6 @@ class _RenderLazyStack extends RenderBox
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    // Only the incoming/active child receives gestures
     final activeChild = _getChild(_index);
     if (activeChild != null) {
       final _LazyStackParentData childParentData =
@@ -541,14 +515,12 @@ class _RenderLazyStack extends RenderBox
         _previousIndex >= 0 ? _getChild(_previousIndex) : null;
     final activeChild = _getChild(_index);
 
-    // Paint outgoing child first (bottom layer)
     if (previousChild != null && previousChild != activeChild) {
       final _LazyStackParentData previousData =
           previousChild.parentData! as _LazyStackParentData;
       context.paintChild(previousChild, previousData.offset + offset);
     }
 
-    // Paint incoming child (top layer)
     if (activeChild != null) {
       final _LazyStackParentData activeData =
           activeChild.parentData! as _LazyStackParentData;
