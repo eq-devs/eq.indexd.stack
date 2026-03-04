@@ -28,7 +28,7 @@ final class LazyLoadIndexedStack extends StatefulWidget {
     this.alignment = AlignmentDirectional.topStart,
     this.textDirection,
     this.animation = IndexdAnimationType.none,
-    this.animationDuration = const Duration(milliseconds: 300),
+    this.animationDuration = const Duration(milliseconds: 200),
   });
 
   @override
@@ -165,25 +165,25 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
         _inFade = CurvedAnimation(
           parent: ac,
-          curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
+          curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
         );
         _outFade = CurvedAnimation(
           parent: ac,
           curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
         );
         _inSlide = Tween<Offset>(
-          begin: isHorizontal ? Offset(sign * 0.08, 0) : Offset(0, sign * 0.08),
+          begin: isHorizontal ? Offset(sign * 0.07, 0) : Offset(0, sign * 0.07),
           end: Offset.zero,
         ).animate(CurvedAnimation(
           parent: ac,
-          curve: Curves.fastLinearToSlowEaseIn,
+          curve: Curves.fastOutSlowIn,
         ));
         _outSlide = Tween<Offset>(
           begin: Offset.zero,
-          end: isHorizontal ? Offset(-sign * 0.08, 0) : Offset(0, -sign * 0.08),
+          end: isHorizontal ? Offset(-sign * 0.07, 0) : Offset(0, -sign * 0.07),
         ).animate(CurvedAnimation(
           parent: ac,
-          curve: Curves.fastLinearToSlowEaseIn,
+          curve: Curves.fastOutSlowIn,
         ));
         _outFadeReverse = ReverseAnimation(_outFade!);
         break;

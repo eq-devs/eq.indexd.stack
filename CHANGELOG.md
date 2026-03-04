@@ -1,3 +1,9 @@
+## 0.1.5
+
+### ✨ Updates & Polish
+- **Faster Animations**: Decreased default animation duration from 250ms to 200ms for a snappier feel.
+- **Improved Animation Curves**: Changed the shared axis slide animation curve to `fastOutSlowIn` and adjusted the slide offset from 15% to 7%.
+
 ## 0.1.4
 
 ### ✨ Updates & Cleanups
