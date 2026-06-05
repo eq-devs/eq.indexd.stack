@@ -448,47 +448,43 @@ class _RenderLazyStack extends RenderBox
     final previousChild =
         _previousIndex >= 0 ? _getChild(_previousIndex) : null;
 
-    if (activeChild == null && previousChild == null) {
-      size = constraints.biggest;
-      return;
-    }
-
+    // Every attached child MUST be laid out each pass (Flutter's layout
+    // contract). Only the active child — and the outgoing child while a
+    // transition is running — determine the stack's size.
     Size maxSize = Size.zero;
-
-    if (activeChild != null) {
-      activeChild.layout(constraints, parentUsesSize: true);
-      maxSize = activeChild.size;
-    }
-
-    if (previousChild != null && previousChild != activeChild) {
-      previousChild.layout(constraints, parentUsesSize: true);
-      final pw = previousChild.size.width;
-      final ph = previousChild.size.height;
-      if (pw > maxSize.width || ph > maxSize.height) {
+    RenderBox? child = firstChild;
+    while (child != null) {
+      child.layout(constraints, parentUsesSize: true);
+      if (child == activeChild || child == previousChild) {
         maxSize = Size(
-          pw > maxSize.width ? pw : maxSize.width,
-          ph > maxSize.height ? ph : maxSize.height,
+          child.size.width > maxSize.width ? child.size.width : maxSize.width,
+          child.size.height > maxSize.height
+              ? child.size.height
+              : maxSize.height,
         );
       }
+      child = childAfter(child);
     }
 
-    size = constraints.constrain(maxSize);
+    size = (activeChild == null && previousChild == null)
+        ? constraints.biggest
+        : constraints.constrain(maxSize);
 
+    // Align every child within the resolved size.
     final Alignment resolvedAlignment = alignment.resolve(textDirection);
-
-    if (activeChild != null) {
-      final _LazyStackParentData activeData =
-          activeChild.parentData! as _LazyStackParentData;
-      activeData.offset =
-          resolvedAlignment.alongOffset((size - activeChild.size) as Offset);
+    child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as _LazyStackParentData;
+      childParentData.offset =
+          resolvedAlignment.alongOffset((size - child.size) as Offset);
+      child = childAfter(child);
     }
+  }
 
-    if (previousChild != null && previousChild != activeChild) {
-      final _LazyStackParentData previousData =
-          previousChild.parentData! as _LazyStackParentData;
-      previousData.offset =
-          resolvedAlignment.alongOffset((size - previousChild.size) as Offset);
-    }
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    final active = _getChild(_index);
+    if (active != null) visitor(active);
   }
 
   @override
