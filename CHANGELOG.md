@@ -1,3 +1,9 @@
+## 0.1.7
+
+### 🐛 Fixes
+- **Layout-contract crash with cached pages**: `_RenderLazyStack.performLayout` now lays out *every* attached child each pass, not just the active and outgoing ones. Cached (loaded but inactive) pages are real, mounted subtrees; skipping their layout left them in `NEEDS-LAYOUT`, so a cached page containing a `TextField` (or anything whose size is later read by the host `Scaffold`) would throw `RenderBox was not laid out: RenderEditable... NEEDS-LAYOUT`. Only the active child — and the outgoing child during a transition — still drive the stack's size; painting and hit-testing remain restricted to those, so inactive pages stay invisible.
+- **Semantics**: Added `visitChildrenForSemantics` so only the active page is exposed to the accessibility tree, matching stock `IndexedStack` behavior now that inactive pages are laid out.
+
 ## 0.1.5
 
 ### ✨ Updates & Polish
