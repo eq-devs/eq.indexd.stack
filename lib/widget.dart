@@ -8,8 +8,9 @@ enum IndexdAnimationType {
   none,
   fade,
   fadeThrough,
+  scaleIn,
   sharedAxisHorizontal,
-  sharedAxisVertical
+  sharedAxisVertical,
 }
 
 @immutable
@@ -20,6 +21,7 @@ final class LazyLoadIndexedStack extends StatefulWidget {
   final TextDirection? textDirection;
   final IndexdAnimationType animation;
   final Duration animationDuration;
+  final double scaleBegin;
 
   const LazyLoadIndexedStack({
     super.key,
@@ -29,7 +31,11 @@ final class LazyLoadIndexedStack extends StatefulWidget {
     this.textDirection,
     this.animation = IndexdAnimationType.none,
     this.animationDuration = const Duration(milliseconds: 200),
-  });
+    this.scaleBegin = 0.98,
+  }) : assert(
+          scaleBegin >= 0.95 && scaleBegin <= 0.99,
+          'scaleBegin must be between 0.95 and 0.99.',
+        );
 
   @override
   State<LazyLoadIndexedStack> createState() => _LazyLoadIndexedStackState();
@@ -48,6 +54,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   CurvedAnimation? _outFade;
   CurvedAnimation? _inScale;
   Animation<double>? _inScaleAnim;
+  Animation<double>? _scaleInIncomingOpacity;
+  Animation<double>? _scaleInOutgoingOpacity;
   Animation<Offset>? _inSlide;
   Animation<Offset>? _outSlide;
 
@@ -167,6 +175,20 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _outFadeReverse = ReverseAnimation(_outFade!);
         break;
 
+      case IndexdAnimationType.scaleIn:
+        // Incoming fades up from transparent; outgoing is its exact complement
+        // so the two cross-dissolve with constant luminance (no Material "dip").
+        final inOpacity = CurveTween(curve: Curves.easeOut).animate(ac);
+        _scaleInIncomingOpacity = inOpacity;
+        _scaleInOutgoingOpacity = ReverseAnimation(inOpacity);
+        _inScale = CurvedAnimation(
+          parent: ac,
+          curve: Curves.easeOutCubic,
+        );
+        _inScaleAnim = Tween<double>(begin: widget.scaleBegin, end: 1.0)
+            .animate(_inScale!);
+        break;
+
       case IndexdAnimationType.sharedAxisHorizontal:
       case IndexdAnimationType.sharedAxisVertical:
         final bool isHorizontal =
@@ -211,6 +233,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     _outFade = null;
     _inScale = null;
     _inScaleAnim = null;
+    _scaleInIncomingOpacity = null;
+    _scaleInOutgoingOpacity = null;
     _inSlide = null;
     _outSlide = null;
     _acReverse = null;
@@ -325,6 +349,26 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           scale = _inScaleAnim ?? _animController!;
         } else {
           opacity = _outFadeReverse ?? _acReverse!;
+          scale = kInertScale;
+        }
+
+        return FadeTransition(
+          opacity: opacity,
+          child: ScaleTransition(scale: scale, child: child),
+        );
+
+      case IndexdAnimationType.scaleIn:
+        Animation<double> opacity;
+        Animation<double> scale;
+
+        if (!isParticipating) {
+          opacity = kInertOpacity;
+          scale = kInertScale;
+        } else if (isIncoming) {
+          opacity = _scaleInIncomingOpacity ?? _animController!;
+          scale = _inScaleAnim ?? _animController!;
+        } else {
+          opacity = _scaleInOutgoingOpacity ?? kInertOpacity;
           scale = kInertScale;
         }
 

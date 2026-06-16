@@ -1,3 +1,17 @@
+## 0.1.8
+
+### ✨ Features
+- Added `IndexdAnimationType.scaleIn`: a subtle iOS-style transition where the incoming page scales from `scaleBegin` (default `0.98`, configurable `0.95`–`0.99`) to `1.0` while cross-dissolving with the outgoing page. The two opacities are exact complements, so there is no Material fade-through "dip".
+
+### 🐛 Fixes
+- **`switchTo` validation**: `LazyStackController.switchTo(index, totalPages)` now validates `index` against `totalPages` (previously ignored), preventing an out-of-range crash on negative indexes and a blank page on too-large ones.
+- **Controller swap**: swapping the `controller` on `LazyLoadIndexedStack` now re-syncs the current index immediately, so the correct page renders instead of a stale/blank one until the new controller emits.
+- **Double rebuild**: `switchTo` with `disposeUnused: true` no longer notifies listeners twice — a single rebuild per switch.
+
+### 📝 Docs & Example
+- README now accurately describes layout vs. paint: every attached child is laid out (Flutter's layout contract), while only the active and outgoing child are painted.
+- Example: replaced deprecated `Switch.activeColor` with `activeThumbColor`.
+
 ## 0.1.7
 
 ### 🐛 Fixes
