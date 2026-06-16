@@ -5,7 +5,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 ## Features
 
 - 🚀 **Custom RenderObject**: Only the active child — and the outgoing child during a transition — is painted and sizes the stack. Attached children are still laid out (Flutter's layout contract requires it), while lazy initialization keeps unvisited pages from being built at all.
-- ⚡ **Native Animations**: Fade, FadeThrough, SharedAxis transitions built without external dependencies
+- ⚡ **Native Animations**: Fade, FadeThrough, ScaleIn, and SharedAxis transitions built without external dependencies
 - 💾 **LRU Cache**: Configurable `maxCachedPages` with automatic least-recently-used eviction
 - 🧹 **Memory Pressure**: Automatic cache flush on OS memory warnings via `WidgetsBindingObserver`
 - 🔄 **TickerMode**: Animations in background tabs are automatically paused
@@ -57,7 +57,7 @@ class _MyAppState extends State<MyApp> {
     return Scaffold(
       body: LazyLoadIndexedStack(
         controller: controller,
-        animation: IndexdAnimationType.fadeThrough, // or .none for zero overhead
+        animation: IndexdAnimationType.scaleIn, // or .none for zero overhead
         children: [
           HomePage(),
           ProfilePage(),
@@ -85,8 +85,8 @@ Pass `IndexdAnimationType` to control tab transitions:
 ```dart
 LazyLoadIndexedStack(
   controller: controller,
-  animation: IndexdAnimationType.sharedAxisHorizontal,
-  animationDuration: const Duration(milliseconds: 200),
+  animation: IndexdAnimationType.scaleIn,
+  animationDuration: const Duration(milliseconds: 240),
   children: [...],
 )
 ```
@@ -96,6 +96,7 @@ LazyLoadIndexedStack(
 | `none` | Instant switch, zero allocation (default) |
 | `fade` | Simple crossfade |
 | `fadeThrough` | Material Design fade through (scale + fade) |
+| `scaleIn` | Subtle iOS-style scale/fade settle from `scaleBegin` to `1.0` |
 | `sharedAxisHorizontal` | Slide + fade on the X axis |
 | `sharedAxisVertical` | Slide + fade on the Y axis |
 
@@ -139,7 +140,8 @@ LazyLoadIndexedStack({
   required LazyStackController controller,
   required List<Widget> children,
   IndexdAnimationType animation = IndexdAnimationType.none,
-  Duration animationDuration = const Duration(milliseconds: 200),
+  Duration animationDuration = const Duration(milliseconds: 240),
+  double scaleBegin = 0.98,
   AlignmentGeometry alignment = AlignmentDirectional.topStart,
   TextDirection? textDirection,
 })

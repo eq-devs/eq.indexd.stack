@@ -37,7 +37,8 @@ class LazyStackHomePage extends StatefulWidget {
 class _LazyStackHomePageState extends State<LazyStackHomePage> {
   late LazyStackController mainController;
   final List<String> memoryLogs = [];
-  IndexdAnimationType _currentAnimation = IndexdAnimationType.fadeThrough;
+  IndexdAnimationType _currentAnimation = IndexdAnimationType.scaleIn;
+  double _scaleBegin = 0.98;
 
   @override
   void initState() {
@@ -90,6 +91,7 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
       body: LazyLoadIndexedStack(
         controller: mainController,
         animation: _currentAnimation,
+        scaleBegin: _scaleBegin,
         children: [
           HeavyFeedPage(onAction: () => _logMemory("Feed list scrolled/acted")),
           ExploreGridPage(onLoad: () => _logMemory("Explore grid loaded")),
@@ -99,9 +101,16 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
           SettingsSimulatorPage(
             controller: mainController,
             currentAnimation: _currentAnimation,
+            scaleBegin: _scaleBegin,
             onAnimationChanged: (anim) {
               setState(() => _currentAnimation = anim);
               _logMemory("Animation changed to ${anim.name}");
+            },
+            onScaleBeginChanged: (value) {
+              setState(() => _scaleBegin = value);
+              _logMemory(
+                "Scale in start changed to ${value.toStringAsFixed(2)}",
+              );
             },
             onSettingsChanged: (msg) => _logMemory(msg),
           ),
@@ -483,14 +492,18 @@ class _PremiumProfilePageState extends State<PremiumProfilePage> {
 class SettingsSimulatorPage extends StatelessWidget {
   final LazyStackController controller;
   final IndexdAnimationType currentAnimation;
+  final double scaleBegin;
   final Function(IndexdAnimationType) onAnimationChanged;
+  final ValueChanged<double> onScaleBeginChanged;
   final Function(String) onSettingsChanged;
 
   const SettingsSimulatorPage({
     super.key,
     required this.controller,
     required this.currentAnimation,
+    required this.scaleBegin,
     required this.onAnimationChanged,
+    required this.onScaleBeginChanged,
     required this.onSettingsChanged,
   });
 
@@ -573,6 +586,30 @@ class SettingsSimulatorPage extends StatelessWidget {
             onChanged: (val) {
               if (val != null) onAnimationChanged(val);
             },
+          ),
+        ),
+        ListTile(
+          title: const Text(
+            'Scale In Start',
+            style: TextStyle(color: Colors.white),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                scaleBegin.toStringAsFixed(2),
+                style: const TextStyle(color: Colors.white54),
+              ),
+              Slider(
+                value: scaleBegin,
+                min: 0.95,
+                max: 0.99,
+                divisions: 4,
+                label: scaleBegin.toStringAsFixed(2),
+                activeColor: Colors.deepPurpleAccent,
+                onChanged: onScaleBeginChanged,
+              ),
+            ],
           ),
         ),
         const Divider(color: Colors.white24, height: 32),
