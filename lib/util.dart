@@ -37,7 +37,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     _flushMemoryCache();
   }
 
-  void _flushMemoryCache() {
+  void _flushMemoryCache({bool notify = true}) {
     bool changed = false;
     final protectedIndexes = {_currentIndex, ...preloadIndexes};
 
@@ -50,7 +50,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    if (changed) {
+    if (changed && notify) {
       notifyListeners();
     }
   }
@@ -68,15 +68,16 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     int index,
     int totalPages,
   ) {
-    if (index == _currentIndex) return;
+    if (index < 0 || index >= totalPages || index == _currentIndex) return;
 
     _currentIndex = index;
     _markAsUsed(index);
 
     // _markAsUsed already calls _enforceMaxSize internally.
-    // Only flush aggressively if disposeUnused is enabled.
+    // Only flush aggressively if disposeUnused is enabled. Suppress its
+    // notify so the switch results in a single rebuild.
     if (disposeUnused) {
-      _flushMemoryCache();
+      _flushMemoryCache(notify: false);
     }
 
     notifyListeners();

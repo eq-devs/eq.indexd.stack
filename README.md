@@ -1,10 +1,10 @@
 # indexd_stack_dev
 
-A high-performance lazy-loading `IndexedStack` for Flutter with a custom `RenderObject` pipeline and native tab transitions. Pages are initialized only when accessed, and inactive tabs consume **zero layout or paint resources**.
+A high-performance lazy-loading `IndexedStack` for Flutter with a custom `RenderObject` pipeline and native tab transitions. Pages are initialized only when first accessed, and only the active tab (plus the outgoing one mid-transition) is **painted** — inactive cached pages consume no paint resources.
 
 ## Features
 
-- 🚀 **Custom RenderObject**: Only the active child participates in layout — inactive cached pages are completely skipped
+- 🚀 **Custom RenderObject**: Only the active child — and the outgoing child during a transition — is painted and sizes the stack. Attached children are still laid out (Flutter's layout contract requires it), while lazy initialization keeps unvisited pages from being built at all.
 - ⚡ **Native Animations**: Fade, FadeThrough, SharedAxis transitions built without external dependencies
 - 💾 **LRU Cache**: Configurable `maxCachedPages` with automatic least-recently-used eviction
 - 🧹 **Memory Pressure**: Automatic cache flush on OS memory warnings via `WidgetsBindingObserver`
@@ -86,7 +86,7 @@ Pass `IndexdAnimationType` to control tab transitions:
 LazyLoadIndexedStack(
   controller: controller,
   animation: IndexdAnimationType.sharedAxisHorizontal,
-  animationDuration: const Duration(milliseconds: 300),
+  animationDuration: const Duration(milliseconds: 200),
   children: [...],
 )
 ```
@@ -139,7 +139,7 @@ LazyLoadIndexedStack({
   required LazyStackController controller,
   required List<Widget> children,
   IndexdAnimationType animation = IndexdAnimationType.none,
-  Duration animationDuration = const Duration(milliseconds: 300),
+  Duration animationDuration = const Duration(milliseconds: 200),
   AlignmentGeometry alignment = AlignmentDirectional.topStart,
   TextDirection? textDirection,
 })

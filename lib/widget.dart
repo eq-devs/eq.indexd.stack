@@ -91,6 +91,16 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onControllerChanged);
       widget.controller.addListener(_onControllerChanged);
+
+      // Re-sync state from the new controller; otherwise build() would read
+      // the new controller's loadedIndexes while rendering the old index.
+      // Settle any in-flight transition from the old controller so the new
+      // page appears fully resolved rather than mid-animation.
+      _animController?.stop();
+      _animController?.value = 1.0;
+      _currentIndex = widget.controller.currentIndex;
+      _previousIndex = _currentIndex;
+      _buildVersion.value++;
     }
 
     if (oldWidget.animation != widget.animation) {
@@ -228,7 +238,19 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           const SizedBox.shrink(),
         );
 
-        for (final i in loadedIndexes) {
+        // While a transition is running, keep the outgoing page in the tree so
+        // it can animate out — even if the controller has already evicted it
+        // (e.g. disposeUnused, or a full cache that dropped it). Otherwise its
+        // slot would be an empty box and the exit animation would play on
+        // nothing.
+        final bool isAnimating = _animController?.isAnimating ?? false;
+        final Iterable<int> renderIndexes = (isAnimating &&
+                _previousIndex >= 0 &&
+                !loadedIndexes.contains(_previousIndex))
+            ? loadedIndexes.followedBy(<int>[_previousIndex])
+            : loadedIndexes;
+
+        for (final i in renderIndexes) {
           if (i < widget.children.length) {
             final isIncoming = i == _currentIndex;
 

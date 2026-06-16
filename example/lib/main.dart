@@ -49,7 +49,7 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
       isListenMemoryPressure: false,
     );
     mainController.addListener(_onControllerChanged);
-    _logMemory("App started. Cache size max: 2");
+    _logMemory("App started. Cache size max: 4");
   }
 
   void _onControllerChanged() {
@@ -519,7 +519,7 @@ class SettingsSimulatorPage extends StatelessWidget {
           ),
           trailing: Switch(
             value: controller.disposeUnused,
-            activeColor: Colors.deepPurpleAccent,
+            activeThumbColor: Colors.deepPurpleAccent,
             onChanged: (val) {
               // Simulated for UI
             },
@@ -592,9 +592,9 @@ class SettingsSimulatorPage extends StatelessWidget {
             style: TextStyle(color: Colors.white),
           ),
           subtitle: Text(
-            'This package now usages native ChangeNotifier bindings, '
-            'synchronous micro-task evictions, and zero-allocation KeyedSubtrees '
-            'to ensure maximum 120fps performance.',
+            'This package uses native ChangeNotifier bindings, a custom '
+            'RenderObject that paints only the active page, and synchronous '
+            'cache eviction to keep tab switches smooth.',
             style: TextStyle(color: Colors.white54),
           ),
         ),
