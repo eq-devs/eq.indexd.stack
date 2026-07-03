@@ -8,6 +8,8 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   final bool isListenMemoryPressure;
 
   final LinkedHashMap<int, bool> _loadedPages = LinkedHashMap<int, bool>();
+  Set<int>? _loadedIndexesView;
+  late final Set<int> _preloadSet = Set<int>.of(preloadIndexes);
 
   LazyStackController({
     int initialIndex = 0,
@@ -26,10 +28,14 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Set<int> get loadedIndexes => Set<int>.unmodifiable(_loadedPages.keys);
+  Set<int> get loadedIndexes =>
+      _loadedIndexesView ??= Set<int>.unmodifiable(_loadedPages.keys);
   int get currentIndex => _currentIndex;
   bool get canGoBack => _currentIndex > 0;
   bool isLoaded(int index) => _loadedPages.containsKey(index);
+
+  bool _isProtected(int index) =>
+      index == _currentIndex || _preloadSet.contains(index);
 
   // Memory pressure handler
   @override
@@ -39,23 +45,26 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _flushMemoryCache({bool notify = true}) {
     bool changed = false;
-    final protectedIndexes = {_currentIndex, ...preloadIndexes};
 
     // Aggressively drop all inactive pages on memory pressure
     final iterator = _loadedPages.keys.toList();
     for (final index in iterator) {
-      if (!protectedIndexes.contains(index)) {
+      if (!_isProtected(index)) {
         _loadedPages.remove(index);
         changed = true;
       }
     }
 
-    if (changed && notify) {
-      notifyListeners();
+    if (changed) {
+      _loadedIndexesView = null;
+      if (notify) {
+        notifyListeners();
+      }
     }
   }
 
   void _markAsUsed(int index) {
+    _loadedIndexesView = null;
     _loadedPages.remove(index);
     _loadedPages[index] = true;
 
@@ -86,14 +95,13 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   void _enforceMaxSize() {
     if (_loadedPages.length <= maxCachedPages) return;
 
-    final protectedIndexes = {_currentIndex, ...preloadIndexes};
     final iterator = _loadedPages.keys.iterator;
     final toRemove = <int>[];
 
     while (iterator.moveNext() &&
         (_loadedPages.length - toRemove.length) > maxCachedPages) {
       final key = iterator.current;
-      if (!protectedIndexes.contains(key)) {
+      if (!_isProtected(key)) {
         toRemove.add(key);
       }
     }
@@ -101,9 +109,13 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     for (final key in toRemove) {
       _loadedPages.remove(key);
     }
+    if (toRemove.isNotEmpty) {
+      _loadedIndexesView = null;
+    }
   }
 
   void reset() {
+    _loadedIndexesView = null;
     _loadedPages.clear();
     _markAsUsed(_currentIndex);
     for (final index in preloadIndexes) {
@@ -113,27 +125,27 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void disposePage(int index) {
-    if (index == _currentIndex || preloadIndexes.contains(index)) {
+    if (_isProtected(index)) {
       return;
     }
 
     if (_loadedPages.remove(index) != null) {
+      _loadedIndexesView = null;
       notifyListeners();
     }
   }
 
   void disposePages(List<int> indexes) {
     bool changed = false;
-    final protectedIndexes = {_currentIndex, ...preloadIndexes};
 
     for (final index in indexes) {
-      if (!protectedIndexes.contains(index) &&
-          _loadedPages.remove(index) != null) {
+      if (!_isProtected(index) && _loadedPages.remove(index) != null) {
         changed = true;
       }
     }
 
     if (changed) {
+      _loadedIndexesView = null;
       notifyListeners();
     }
   }
@@ -172,6 +184,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _loadedIndexesView = null;
     _loadedPages.clear();
     if (isListenMemoryPressure) {
       WidgetsBinding.instance.removeObserver(this);

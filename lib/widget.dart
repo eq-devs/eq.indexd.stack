@@ -62,6 +62,11 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   Animation<double>? _acReverse;
   Animation<double>? _outFadeReverse;
 
+  // What the cached animations were built for; only the shared-axis types
+  // depend on direction.
+  IndexdAnimationType? _builtForAnimation;
+  bool _builtForForward = true;
+
   static const kInertScale = AlwaysStoppedAnimation(1.0);
   static const kInertOpacity = AlwaysStoppedAnimation(1.0);
   static const kInertSlide = AlwaysStoppedAnimation(Offset.zero);
@@ -126,6 +131,11 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _animController != null) {
       _animController!.duration = widget.animationDuration;
     }
+
+    // The scaleIn tween bakes in scaleBegin; force a rebuild on next switch.
+    if (oldWidget.scaleBegin != widget.scaleBegin) {
+      _builtForAnimation = null;
+    }
   }
 
   void _onControllerChanged() {
@@ -138,7 +148,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
         if (widget.animation != IndexdAnimationType.none &&
             _animController != null) {
-          _buildCachedAnimations();
+          _ensureCachedAnimations();
           _animController!.forward(from: 0.0);
         }
 
@@ -147,6 +157,19 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     } else {
       _buildVersion.value++;
     }
+  }
+
+  void _ensureCachedAnimations() {
+    final bool directionSensitive =
+        widget.animation == IndexdAnimationType.sharedAxisHorizontal ||
+            widget.animation == IndexdAnimationType.sharedAxisVertical;
+    if (_builtForAnimation == widget.animation &&
+        (!directionSensitive || _builtForForward == _isForward)) {
+      return;
+    }
+    _buildCachedAnimations();
+    _builtForAnimation = widget.animation;
+    _builtForForward = _isForward;
   }
 
   void _buildCachedAnimations() {
@@ -226,6 +249,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   }
 
   void _disposeCachedAnimations() {
+    _builtForAnimation = null;
     _inFade?.dispose();
     _outFade?.dispose();
     _inScale?.dispose();
@@ -282,7 +306,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
                 _animController == null) {
               visibleChildren[i] = TickerMode(
                 enabled: isIncoming,
-                child: widget.children[i],
+                child: RepaintBoundary(child: widget.children[i]),
               );
               continue;
             }
@@ -291,9 +315,12 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
             final isAnimating = _animController!.isAnimating;
             final isParticipating = isIncoming || (isOutgoing && isAnimating);
 
+            // The boundary lets the compositor reuse each page's cached
+            // raster during transitions instead of repainting the page's
+            // contents every animation frame.
             Widget child = TickerMode(
               enabled: isParticipating,
-              child: widget.children[i],
+              child: RepaintBoundary(child: widget.children[i]),
             );
 
             child = AnimatedBuilder(
@@ -510,18 +537,25 @@ class _RenderLazyStack extends RenderBox
 
   @override
   void performLayout() {
-    final activeChild = _getChild(_index);
-    final previousChild =
-        _previousIndex >= 0 ? _getChild(_previousIndex) : null;
-
     // Every attached child MUST be laid out each pass (Flutter's layout
     // contract). Only the active child — and the outgoing child while a
-    // transition is running — determine the stack's size.
+    // transition is running — determine the stack's size, so only they are
+    // laid out with parentUsesSize: true. Hidden children use
+    // parentUsesSize: false, which makes each one its own relayout boundary:
+    // a size change inside a hidden cached page relays out that page alone
+    // instead of dirtying the whole stack.
+    RenderBox? activeChild;
+    RenderBox? previousChild;
     Size maxSize = Size.zero;
+    int childIndex = 0;
     RenderBox? child = firstChild;
     while (child != null) {
-      child.layout(constraints, parentUsesSize: true);
-      if (child == activeChild || child == previousChild) {
+      final bool sizesStack = childIndex == _index ||
+          (_previousIndex >= 0 && childIndex == _previousIndex);
+      child.layout(constraints, parentUsesSize: sizesStack);
+      if (sizesStack) {
+        if (childIndex == _index) activeChild = child;
+        if (childIndex == _previousIndex) previousChild = child;
         maxSize = Size(
           child.size.width > maxSize.width ? child.size.width : maxSize.width,
           child.size.height > maxSize.height
@@ -530,20 +564,24 @@ class _RenderLazyStack extends RenderBox
         );
       }
       child = childAfter(child);
+      childIndex++;
     }
 
     size = (activeChild == null && previousChild == null)
         ? constraints.biggest
         : constraints.constrain(maxSize);
 
-    // Align every child within the resolved size.
+    // Only the active and outgoing children are painted or hit-tested, so
+    // only their offsets matter — and hidden children's sizes cannot be read
+    // here anyway (laid out with parentUsesSize: false). When a hidden child
+    // becomes active, the index setter marks this stack for relayout and its
+    // offset is computed then.
     final Alignment resolvedAlignment = alignment.resolve(textDirection);
-    child = firstChild;
-    while (child != null) {
-      final childParentData = child.parentData! as _LazyStackParentData;
+    for (final positioned in <RenderBox?>[activeChild, previousChild]) {
+      if (positioned == null) continue;
+      final childParentData = positioned.parentData! as _LazyStackParentData;
       childParentData.offset =
-          resolvedAlignment.alongOffset((size - child.size) as Offset);
-      child = childAfter(child);
+          resolvedAlignment.alongOffset((size - positioned.size) as Offset);
     }
   }
 

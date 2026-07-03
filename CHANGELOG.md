@@ -1,3 +1,14 @@
+## 0.1.9
+
+### ⚡ Performance
+- **Hidden pages are now relayout boundaries**: `_RenderLazyStack` lays out hidden cached pages with `parentUsesSize: false`, so a size change inside a hidden page (async data arriving, a growing list) relays out that page alone instead of dirtying the whole stack. Active and outgoing children are also resolved in a single child traversal instead of repeated linked-list walks.
+- **Repaint boundaries around pages**: every loaded page is wrapped in a `RepaintBoundary` (at constant tree depth, so page state is preserved), letting transitions composite each page's cached raster instead of re-rasterizing both pages every animation frame.
+- **Fewer allocations on the switch path**: cached transition animations are rebuilt only when the animation type (or direction, for shared-axis) changes; `LazyStackController.loadedIndexes` caches its unmodifiable view instead of copying a `Set` per rebuild; protected-index checks use a precomputed set.
+
+### ✅ Tests
+- Regression test proving hidden-page relayout stops at its own boundary.
+- Regression test proving the outgoing page's `State` survives an eviction mid-transition (one `initState`, one `dispose`).
+
 ## 0.1.8
 
 ### ✨ Features
