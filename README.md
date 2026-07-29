@@ -15,7 +15,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 
 ```yaml
 dependencies:
-  indexd_stack_dev: ^0.1.0
+  indexd_stack_dev: ^0.2.0
 ```
 
 ```bash
@@ -86,7 +86,7 @@ Pass `IndexdAnimationType` to control tab transitions:
 LazyLoadIndexedStack(
   controller: controller,
   animation: IndexdAnimationType.scaleIn,
-  animationDuration: const Duration(milliseconds: 240),
+  animationDuration: const Duration(milliseconds: 320),
   children: [...],
 )
 ```
@@ -96,7 +96,7 @@ LazyLoadIndexedStack(
 | `none` | Instant switch, zero allocation (default) |
 | `fade` | Simple crossfade |
 | `fadeThrough` | Material Design fade through (scale + fade) |
-| `scaleIn` | Subtle iOS-style scale/fade settle from `scaleBegin` to `1.0` |
+| `scaleIn` | Quiet iOS-style settle: fade + tiny bilateral scale (`0.992`↔`1.0`), no slide. Prefer ~320ms. |
 | `sharedAxisHorizontal` | Slide + fade on the X axis |
 | `sharedAxisVertical` | Slide + fade on the Y axis |
 
@@ -140,8 +140,7 @@ LazyLoadIndexedStack({
   required LazyStackController controller,
   required List<Widget> children,
   IndexdAnimationType animation = IndexdAnimationType.none,
-  Duration animationDuration = const Duration(milliseconds: 240),
-  double scaleBegin = 0.98,
+  Duration animationDuration = const Duration(milliseconds: 200),
   AlignmentGeometry alignment = AlignmentDirectional.topStart,
   TextDirection? textDirection,
 })

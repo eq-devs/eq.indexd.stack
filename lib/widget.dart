@@ -4,6 +4,12 @@ import 'package:flutter/widgets.dart';
 
 part 'util.dart';
 
+/// Soft iOS-like settle curve (close to UIKit continuous).
+const Curve _kScaleInCurve = Cubic(0.22, 1.0, 0.36, 1.0);
+
+/// Quiet scale offset for tab page settle.
+const double _kScaleInBegin = 0.992;
+
 enum IndexdAnimationType {
   none,
   fade,
@@ -21,7 +27,6 @@ final class LazyLoadIndexedStack extends StatefulWidget {
   final TextDirection? textDirection;
   final IndexdAnimationType animation;
   final Duration animationDuration;
-  final double scaleBegin;
 
   const LazyLoadIndexedStack({
     super.key,
@@ -31,11 +36,7 @@ final class LazyLoadIndexedStack extends StatefulWidget {
     this.textDirection,
     this.animation = IndexdAnimationType.none,
     this.animationDuration = const Duration(milliseconds: 200),
-    this.scaleBegin = 0.98,
-  }) : assert(
-          scaleBegin >= 0.95 && scaleBegin <= 0.99,
-          'scaleBegin must be between 0.95 and 0.99.',
-        );
+  });
 
   @override
   State<LazyLoadIndexedStack> createState() => _LazyLoadIndexedStackState();
@@ -54,6 +55,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   CurvedAnimation? _outFade;
   CurvedAnimation? _inScale;
   Animation<double>? _inScaleAnim;
+  Animation<double>? _outScaleAnim;
   Animation<double>? _scaleInIncomingOpacity;
   Animation<double>? _scaleInOutgoingOpacity;
   Animation<Offset>? _inSlide;
@@ -131,11 +133,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _animController != null) {
       _animController!.duration = widget.animationDuration;
     }
-
-    // The scaleIn tween bakes in scaleBegin; force a rebuild on next switch.
-    if (oldWidget.scaleBegin != widget.scaleBegin) {
-      _builtForAnimation = null;
-    }
   }
 
   void _onControllerChanged() {
@@ -199,17 +196,21 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         break;
 
       case IndexdAnimationType.scaleIn:
-        // Incoming fades up from transparent; outgoing is its exact complement
-        // so the two cross-dissolve with constant luminance (no Material "dip").
-        final inOpacity = CurveTween(curve: Curves.easeOut).animate(ac);
-        _scaleInIncomingOpacity = inOpacity;
-        _scaleInOutgoingOpacity = ReverseAnimation(inOpacity);
+        // Quiet fade + tiny bilateral scale. One shared settle curve; outgoing
+        // opacity is the exact complement (constant luminance, no "dip").
         _inScale = CurvedAnimation(
           parent: ac,
-          curve: Curves.easeOutCubic,
+          curve: _kScaleInCurve,
+          reverseCurve: _kScaleInCurve.flipped,
         );
-        _inScaleAnim = Tween<double>(begin: widget.scaleBegin, end: 1.0)
-            .animate(_inScale!);
+        final inOpacity =
+            Tween<double>(begin: 0.0, end: 1.0).animate(_inScale!);
+        _scaleInIncomingOpacity = inOpacity;
+        _scaleInOutgoingOpacity = ReverseAnimation(inOpacity);
+        _inScaleAnim =
+            Tween<double>(begin: _kScaleInBegin, end: 1.0).animate(_inScale!);
+        _outScaleAnim =
+            Tween<double>(begin: 1.0, end: _kScaleInBegin).animate(_inScale!);
         break;
 
       case IndexdAnimationType.sharedAxisHorizontal:
@@ -257,6 +258,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     _outFade = null;
     _inScale = null;
     _inScaleAnim = null;
+    _outScaleAnim = null;
     _scaleInIncomingOpacity = null;
     _scaleInOutgoingOpacity = null;
     _inSlide = null;
@@ -393,15 +395,19 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           scale = kInertScale;
         } else if (isIncoming) {
           opacity = _scaleInIncomingOpacity ?? _animController!;
-          scale = _inScaleAnim ?? _animController!;
+          scale = _inScaleAnim ?? kInertScale;
         } else {
           opacity = _scaleInOutgoingOpacity ?? kInertOpacity;
-          scale = kInertScale;
+          scale = _outScaleAnim ?? kInertScale;
         }
 
         return FadeTransition(
           opacity: opacity,
-          child: ScaleTransition(scale: scale, child: child),
+          child: ScaleTransition(
+            scale: scale,
+            alignment: Alignment.center,
+            child: child,
+          ),
         );
 
       case IndexdAnimationType.sharedAxisHorizontal:

@@ -2,128 +2,383 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
-void main() {
-  testWidgets('scaleIn scales and fades the incoming page', (tester) async {
-    final controller = LazyStackController(maxCachedPages: 2);
+const _kScaleBegin = 0.992;
+const _kDuration = Duration(milliseconds: 320);
 
-    await tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: LazyLoadIndexedStack(
-          controller: controller,
-          animation: IndexdAnimationType.scaleIn,
-          animationDuration: const Duration(milliseconds: 200),
-          scaleBegin: 0.95,
-          children: const [
-            Center(child: Text('A')),
-            Center(child: Text('B')),
-          ],
-        ),
-      ),
-    );
-
-    controller.switchTo(1, 2);
-    await tester.pump();
-
-    final incomingScaleFinder = find.ancestor(
-      of: find.text('B'),
+Finder _scaleOf(String label) => find.ancestor(
+      of: find.text(label),
       matching: find.byType(ScaleTransition),
     );
-    final initialScale =
-        tester.widget<ScaleTransition>(incomingScaleFinder).scale.value;
-    final incomingFadeFinder = find.ancestor(
-      of: find.text('B'),
+
+Finder _fadeOf(String label) => find.ancestor(
+      of: find.text(label),
       matching: find.byType(FadeTransition),
     );
-    final initialOpacity =
-        tester.widget<FadeTransition>(incomingFadeFinder).opacity.value;
 
-    // Incoming starts small and transparent, then settles.
-    expect(initialScale, greaterThanOrEqualTo(0.95));
-    expect(initialScale, lessThan(1.0));
-    expect(incomingFadeFinder, findsOneWidget);
-    expect(initialOpacity, moreOrLessEquals(0.0));
+double _scale(WidgetTester tester, String label) =>
+    tester.widget<ScaleTransition>(_scaleOf(label)).scale.value;
 
-    await tester.pump(const Duration(milliseconds: 100));
+double _opacity(WidgetTester tester, String label) =>
+    tester.widget<FadeTransition>(_fadeOf(label)).opacity.value;
 
-    final midIncomingOpacity =
-        tester.widget<FadeTransition>(incomingFadeFinder).opacity.value;
-    final outgoingFadeFinder = find.ancestor(
-      of: find.text('A'),
-      matching: find.byType(FadeTransition),
-    );
-    final midOutgoingOpacity =
-        tester.widget<FadeTransition>(outgoingFadeFinder).opacity.value;
+Future<LazyStackController> _pumpScaleIn(
+  WidgetTester tester, {
+  int pageCount = 3,
+  int maxCachedPages = 3,
+  bool disposeUnused = false,
+  Duration duration = _kDuration,
+  IndexdAnimationType animation = IndexdAnimationType.scaleIn,
+}) async {
+  final controller = LazyStackController(
+    maxCachedPages: maxCachedPages,
+    disposeUnused: disposeUnused,
+  );
 
-    // Mid-flight: a clean cross-dissolve — the two opacities are complements
-    // (constant total luminance, no Material "dip").
-    expect(midIncomingOpacity, greaterThan(0.0));
-    expect(midIncomingOpacity, lessThan(1.0));
-    expect(midOutgoingOpacity, greaterThan(0.0));
-    expect(midOutgoingOpacity, lessThan(1.0));
-    expect(midIncomingOpacity + midOutgoingOpacity, moreOrLessEquals(1.0));
+  await tester.pumpWidget(
+    Directionality(
+      textDirection: TextDirection.ltr,
+      child: LazyLoadIndexedStack(
+        controller: controller,
+        animation: animation,
+        animationDuration: duration,
+        children: [
+          for (var i = 0; i < pageCount; i++)
+            Center(child: Text('P$i')),
+        ],
+      ),
+    ),
+  );
 
-    await tester.pumpAndSettle();
+  addTearDown(controller.dispose);
+  return controller;
+}
 
-    final settledScale =
-        tester.widget<ScaleTransition>(incomingScaleFinder).scale.value;
-    final settledOpacity =
-        tester.widget<FadeTransition>(incomingFadeFinder).opacity.value;
+void main() {
+  group('scaleIn start / mid / end', () {
+    testWidgets('incoming starts at 0.992 / 0 and outgoing at 1.0 / 1.0',
+        (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-    expect(settledScale, moreOrLessEquals(1.0));
-    expect(settledOpacity, moreOrLessEquals(1.0));
-    expect(tester.takeException(), isNull);
+      controller.switchTo(1, 2);
+      await tester.pump();
+
+      expect(_scale(tester, 'P1'), moreOrLessEquals(_kScaleBegin));
+      expect(_opacity(tester, 'P1'), moreOrLessEquals(0.0));
+      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
+    });
+
+    testWidgets('mid-flight opacities are exact complements', (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      controller.switchTo(1, 2);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 160));
+
+      final inOp = _opacity(tester, 'P1');
+      final outOp = _opacity(tester, 'P0');
+
+      expect(inOp, greaterThan(0.0));
+      expect(inOp, lessThan(1.0));
+      expect(outOp, greaterThan(0.0));
+      expect(outOp, lessThan(1.0));
+      expect(inOp + outOp, moreOrLessEquals(1.0));
+    });
+
+    testWidgets('mid-flight both pages scale toward each other', (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      controller.switchTo(1, 2);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 160));
+
+      final inScale = _scale(tester, 'P1');
+      final outScale = _scale(tester, 'P0');
+
+      expect(inScale, greaterThan(_kScaleBegin));
+      expect(inScale, lessThan(1.0));
+      expect(outScale, lessThan(1.0));
+      expect(outScale, greaterThan(_kScaleBegin));
+      // Bilateral scale is complementary around the same offset.
+      expect(inScale + outScale, moreOrLessEquals(1.0 + _kScaleBegin));
+    });
+
+    testWidgets('fade and scale share the same progress', (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      controller.switchTo(1, 2);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 160));
+
+      final inOp = _opacity(tester, 'P1');
+      final inScale = _scale(tester, 'P1');
+      final scaleProgress = (inScale - _kScaleBegin) / (1.0 - _kScaleBegin);
+
+      expect(scaleProgress, moreOrLessEquals(inOp, epsilon: 0.001));
+    });
+
+    testWidgets('settles to full scale and opacity on incoming page',
+        (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      controller.switchTo(1, 2);
+      await tester.pumpAndSettle();
+
+      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(find.text('P1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
-  test('scaleBegin asserts the supported range', () {
-    final controller = LazyStackController();
+  group('scaleIn direction and repeats', () {
+    testWidgets('backward switch uses the same quiet settle', (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-    expect(
-      () => LazyLoadIndexedStack(
-        controller: controller,
-        scaleBegin: 0.94,
-        children: const [SizedBox()],
-      ),
-      throwsAssertionError,
-    );
-    expect(
-      () => LazyLoadIndexedStack(
-        controller: controller,
-        scaleBegin: 1.0,
-        children: const [SizedBox()],
-      ),
-      throwsAssertionError,
-    );
-    expect(
-      () => LazyLoadIndexedStack(
-        controller: controller,
-        scaleBegin: 0.95,
-        children: const [SizedBox()],
-      ),
-      returnsNormally,
-    );
-    expect(
-      () => LazyLoadIndexedStack(
-        controller: controller,
-        scaleBegin: 0.99,
-        children: const [SizedBox()],
-      ),
-      returnsNormally,
-    );
+      controller.switchTo(1, 2);
+      await tester.pumpAndSettle();
 
-    controller.dispose();
+      controller.switchTo(0, 2);
+      await tester.pump();
+
+      expect(_scale(tester, 'P0'), moreOrLessEquals(_kScaleBegin));
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(0.0));
+      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P1'), moreOrLessEquals(1.0));
+
+      await tester.pump(const Duration(milliseconds: 160));
+      expect(
+        _opacity(tester, 'P0') + _opacity(tester, 'P1'),
+        moreOrLessEquals(1.0),
+      );
+
+      await tester.pumpAndSettle();
+      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
+    });
+
+    testWidgets('rapid successive switches settle without errors',
+        (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 3);
+
+      controller.switchTo(1, 3);
+      await tester.pump();
+      controller.switchTo(2, 3);
+      await tester.pump();
+      controller.switchTo(0, 3);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.text('P0'), findsOneWidget);
+      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('multiple full switches keep settling cleanly', (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 3);
+
+      for (final target in [1, 2, 0, 1]) {
+        controller.switchTo(target, 3);
+        await tester.pumpAndSettle();
+        expect(find.text('P$target'), findsOneWidget);
+        expect(_scale(tester, 'P$target'), moreOrLessEquals(1.0));
+        expect(_opacity(tester, 'P$target'), moreOrLessEquals(1.0));
+      }
+
+      expect(tester.takeException(), isNull);
+    });
   });
 
-  test('scaleBegin defaults to a subtle scale offset', () {
-    final controller = LazyStackController();
+  group('scaleIn tree / participation', () {
+    testWidgets('does not use SlideTransition', (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-    final stack = LazyLoadIndexedStack(
-      controller: controller,
-      children: const [SizedBox()],
+      controller.switchTo(1, 2);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(SlideTransition), findsNothing);
+      expect(find.byType(ScaleTransition), findsWidgets);
+      expect(find.byType(FadeTransition), findsWidgets);
+    });
+
+    testWidgets('non-participating cached page stays inert at 1.0',
+        (tester) async {
+      final controller = await _pumpScaleIn(
+        tester,
+        pageCount: 3,
+        maxCachedPages: 3,
+      );
+
+      // Visit P2 so it is cached, then leave it idle while P0→P1 animates.
+      controller.switchTo(2, 3);
+      await tester.pumpAndSettle();
+      controller.switchTo(0, 3);
+      await tester.pumpAndSettle();
+
+      controller.switchTo(1, 3);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 160));
+
+      expect(controller.isLoaded(2), isTrue);
+      expect(find.text('P2'), findsOneWidget);
+      expect(_scale(tester, 'P2'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P2'), moreOrLessEquals(1.0));
+    });
+
+    testWidgets(
+      'outgoing page still scales out when controller evicts it mid-transition',
+      (tester) async {
+        final controller = await _pumpScaleIn(
+          tester,
+          pageCount: 2,
+          maxCachedPages: 1,
+          disposeUnused: true,
+        );
+
+        controller.switchTo(1, 2);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 160));
+
+        expect(controller.isLoaded(0), isFalse);
+        expect(find.text('P0'), findsOneWidget);
+        expect(_scale(tester, 'P0'), lessThan(1.0));
+        expect(_opacity(tester, 'P0'), lessThan(1.0));
+        expect(_opacity(tester, 'P0') + _opacity(tester, 'P1'),
+            moreOrLessEquals(1.0));
+
+        await tester.pumpAndSettle();
+        expect(find.text('P0'), findsNothing);
+        expect(find.text('P1'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
     );
 
-    expect(stack.scaleBegin, 0.98);
+    testWidgets('ScaleTransition is centered', (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-    controller.dispose();
+      controller.switchTo(1, 2);
+      await tester.pump();
+
+      final scale = tester.widget<ScaleTransition>(_scaleOf('P1'));
+      expect(scale.alignment, Alignment.center);
+    });
+  });
+
+  group('scaleIn config and animation swaps', () {
+    testWidgets('respects a custom animationDuration', (tester) async {
+      final controller = await _pumpScaleIn(
+        tester,
+        pageCount: 2,
+        duration: const Duration(milliseconds: 100),
+      );
+
+      controller.switchTo(1, 2);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(_opacity(tester, 'P1'), greaterThan(0.0));
+      expect(_opacity(tester, 'P1'), lessThan(1.0));
+
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(_opacity(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
+    });
+
+    testWidgets('switching into scaleIn from fade works', (tester) async {
+      final controller = LazyStackController(maxCachedPages: 2);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: LazyLoadIndexedStack(
+            controller: controller,
+            animation: IndexdAnimationType.fade,
+            animationDuration: _kDuration,
+            children: const [
+              Center(child: Text('P0')),
+              Center(child: Text('P1')),
+            ],
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: LazyLoadIndexedStack(
+            controller: controller,
+            animation: IndexdAnimationType.scaleIn,
+            animationDuration: _kDuration,
+            children: const [
+              Center(child: Text('P0')),
+              Center(child: Text('P1')),
+            ],
+          ),
+        ),
+      );
+
+      controller.switchTo(1, 2);
+      await tester.pump();
+
+      expect(_scale(tester, 'P1'), moreOrLessEquals(_kScaleBegin));
+      expect(_opacity(tester, 'P1'), moreOrLessEquals(0.0));
+
+      await tester.pumpAndSettle();
+      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('switching from scaleIn to none stops allocating transitions',
+        (tester) async {
+      final controller = LazyStackController(maxCachedPages: 2);
+
+      Widget build(IndexdAnimationType animation) {
+        return Directionality(
+          textDirection: TextDirection.ltr,
+          child: LazyLoadIndexedStack(
+            controller: controller,
+            animation: animation,
+            animationDuration: _kDuration,
+            children: const [
+              Center(child: Text('P0')),
+              Center(child: Text('P1')),
+            ],
+          ),
+        );
+      }
+
+      await tester.pumpWidget(build(IndexdAnimationType.scaleIn));
+      addTearDown(controller.dispose);
+
+      controller.switchTo(1, 2);
+      await tester.pumpAndSettle();
+
+      await tester.pumpWidget(build(IndexdAnimationType.none));
+      controller.switchTo(0, 2);
+      await tester.pump();
+
+      expect(find.byType(ScaleTransition), findsNothing);
+      expect(find.byType(FadeTransition), findsNothing);
+      expect(find.text('P0'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('scaleBegin API is removed from LazyLoadIndexedStack',
+        (tester) async {
+      // Compile-time contract: constructing without scaleBegin must work.
+      final controller = LazyStackController();
+      final stack = LazyLoadIndexedStack(
+        controller: controller,
+        animation: IndexdAnimationType.scaleIn,
+        children: const [SizedBox()],
+      );
+
+      expect(stack.animation, IndexdAnimationType.scaleIn);
+      expect(stack.animationDuration, const Duration(milliseconds: 200));
+      controller.dispose();
+    });
   });
 }

@@ -1,3 +1,11 @@
+## 0.2.0
+
+### ✨ Updates
+- **`scaleIn` quiet settle**: shared soft iOS curve (`Cubic(0.22, 1.0, 0.36, 1.0)`), fade + tiny bilateral scale (`0.992`↔`1.0`) on both pages, still a complementary crossfade (no luminance dip).
+
+### 💥 Breaking
+- **Removed `scaleBegin`**: the offset is fixed at `0.992`; tune feel with `animationDuration` (example/docs recommend ~320ms for `scaleIn`).
+
 ## 0.1.9
 
 ### ⚡ Performance
