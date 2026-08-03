@@ -1,5 +1,9 @@
-part of 'widget.dart';
+import 'dart:collection';
 
+import 'package:flutter/widgets.dart';
+
+/// Controls which pages are loaded, cached, and currently visible in a
+/// `LazyLoadIndexedStack`.
 class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   int _currentIndex;
   final int maxCachedPages;
@@ -37,7 +41,6 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   bool _isProtected(int index) =>
       index == _currentIndex || _preloadSet.contains(index);
 
-  // Memory pressure handler
   @override
   void didHaveMemoryPressure() {
     _flushMemoryCache();
@@ -46,7 +49,6 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   void _flushMemoryCache({bool notify = true}) {
     bool changed = false;
 
-    // Aggressively drop all inactive pages on memory pressure
     final iterator = _loadedPages.keys.toList();
     for (final index in iterator) {
       if (!_isProtected(index)) {

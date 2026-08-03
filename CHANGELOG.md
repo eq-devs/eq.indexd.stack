@@ -4,6 +4,13 @@
 - **`scaleIn` matches ant `AntTabPageTransition`**: pure Flutter `FadeTransition` + `ScaleTransition`, shared soft iOS curve (`Cubic(0.22, 1.0, 0.36, 1.0)`), fade `0`↔`1` + tiny bilateral scale (`0.992`↔`1.0`), no slide. Prefer ~320ms.
 - All other `IndexdAnimationType`s stay on pure Flutter transitions (`FadeTransition` / `ScaleTransition` / `SlideTransition`) with cached curved animations — no animation framework dependency.
 
+### 📝 Docs
+- Product guidance: tab shells → `scaleIn` @ ~320ms (or `fade` @ ~200–250ms); keep `none` as the zero-overhead package default; reserve shared-axis for directional flows.
+- Dartdoc on `IndexdAnimationType` / `LazyLoadIndexedStack` documents recommended durations.
+
+### ♻️ Refactor
+- Split library into `src/` by concern: `widgets/`, `controller/`, `transitions/`, `rendering/` (public API unchanged via barrel export).
+
 ## 0.2.0
 
 ### ✨ Updates
