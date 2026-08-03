@@ -177,8 +177,11 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           final isOutgoing = i == _previousIndex;
           final isParticipating = isIncoming || (isOutgoing && isAnimating);
 
+          // Only the incoming/active page keeps ticking; the outgoing page is
+          // frozen the moment it starts fading out, never re-enabled once a
+          // page is on its way out.
           Widget child = TickerMode(
-            enabled: isParticipating,
+            enabled: isIncoming,
             child: RepaintBoundary(child: widget.children[i]),
           );
 

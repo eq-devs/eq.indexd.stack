@@ -1,7 +1,12 @@
+## 0.3.1
+
+### 🐛 Fixes
+- **Outgoing page ticks froze too late**: the outgoing page's `TickerMode` stayed enabled for the whole exit transition instead of freezing immediately once it started fading out. Now only the incoming/active page keeps ticking, matching the intended quiet-settle behavior exactly.
+
 ## 0.3.0
 
 ### ✨ Updates
-- **`scaleIn` matches ant `AntTabPageTransition`**: pure Flutter `FadeTransition` + `ScaleTransition`, shared soft iOS curve (`Cubic(0.22, 1.0, 0.36, 1.0)`), fade `0`↔`1` + tiny bilateral scale (`0.992`↔`1.0`), no slide. Prefer ~320ms.
+- **`scaleIn` quiet iOS-style settle**: pure Flutter `FadeTransition` + `ScaleTransition`, shared soft iOS curve (`Cubic(0.22, 1.0, 0.36, 1.0)`), fade `0`↔`1` + tiny bilateral scale (`0.992`↔`1.0`), no slide. Prefer ~320ms.
 - All other `IndexdAnimationType`s stay on pure Flutter transitions (`FadeTransition` / `ScaleTransition` / `SlideTransition`) with cached curved animations — no animation framework dependency.
 
 ### 📝 Docs

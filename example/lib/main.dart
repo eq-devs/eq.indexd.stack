@@ -1,9 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
 void main() {
+  timeDilation = 5.0;
   runApp(const ComplexLazyStackDemo());
 }
 

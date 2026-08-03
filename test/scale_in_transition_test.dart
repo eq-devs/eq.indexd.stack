@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
-/// Same as ant `AntTabPageTransition`.
 const _kScaleBegin = 0.992;
 const _kDuration = Duration(milliseconds: 320);
 
@@ -21,6 +20,14 @@ double _scale(WidgetTester tester, String label) =>
 
 double _opacity(WidgetTester tester, String label) =>
     tester.widget<FadeTransition>(_fadeOf(label)).opacity.value;
+
+Finder _tickerModeOf(String label) => find.ancestor(
+      of: find.text(label),
+      matching: find.byType(TickerMode),
+    );
+
+bool _tickerEnabled(WidgetTester tester, String label) =>
+    tester.widget<TickerMode>(_tickerModeOf(label)).enabled;
 
 Future<LazyStackController> _pumpScaleIn(
   WidgetTester tester, {
@@ -262,6 +269,43 @@ void main() {
 
       final scale = tester.widget<ScaleTransition>(_scaleOf('P1'));
       expect(scale.alignment, Alignment.center);
+    });
+  });
+
+  group('scaleIn ticker mode', () {
+    testWidgets('outgoing page is frozen the instant the transition starts',
+        (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      controller.switchTo(1, 2);
+      await tester.pump();
+
+      expect(_tickerEnabled(tester, 'P1'), isTrue);
+      expect(_tickerEnabled(tester, 'P0'), isFalse);
+    });
+
+    testWidgets('outgoing page stays frozen for the rest of the transition',
+        (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      controller.switchTo(1, 2);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 160));
+
+      expect(_tickerEnabled(tester, 'P1'), isTrue);
+      expect(_tickerEnabled(tester, 'P0'), isFalse);
+    });
+
+    testWidgets(
+        'active idle page keeps ticking once settled; cached page stays frozen',
+        (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      controller.switchTo(1, 2);
+      await tester.pumpAndSettle();
+
+      expect(_tickerEnabled(tester, 'P1'), isTrue);
+      expect(_tickerEnabled(tester, 'P0'), isFalse);
     });
   });
 

@@ -2,10 +2,10 @@ import 'package:flutter/widgets.dart';
 
 import '../indexd_animation_type.dart';
 
-/// Soft iOS-like settle curve — same as ant `AntTabPageTransition`.
+/// Soft iOS-like settle curve for the quiet "scale + fade" tab transition.
 const Curve kScaleInCurve = Cubic(0.22, 1.0, 0.36, 1.0);
 
-/// Quiet scale offset — same as ant `AntTabPageTransition` (`0.992` ↔ `1.0`).
+/// Quiet scale offset for the incoming/outgoing pages (`0.992` ↔ `1.0`).
 const double kScaleInBegin = 0.992;
 
 /// Cached curved animations for lazy-stack page transitions.
@@ -79,7 +79,7 @@ final class StackTransitionAnimations {
         break;
 
       case IndexdAnimationType.scaleIn:
-        // Pure Flutter equivalent of ant `AntTabPageTransition`.
+        // Quiet iOS-style settle: fade + tiny bilateral scale, no slide.
         _inScale = CurvedAnimation(
           parent: ac,
           curve: kScaleInCurve,
