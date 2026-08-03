@@ -1,3 +1,9 @@
+## 0.3.0
+
+### ✨ Updates
+- **`scaleIn` matches ant `AntTabPageTransition`**: pure Flutter `FadeTransition` + `ScaleTransition`, shared soft iOS curve (`Cubic(0.22, 1.0, 0.36, 1.0)`), fade `0`↔`1` + tiny bilateral scale (`0.992`↔`1.0`), no slide. Prefer ~320ms.
+- All other `IndexdAnimationType`s stay on pure Flutter transitions (`FadeTransition` / `ScaleTransition` / `SlideTransition`) with cached curved animations — no animation framework dependency.
+
 ## 0.2.0
 
 ### ✨ Updates

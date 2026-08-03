@@ -5,7 +5,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 ## Features
 
 - 🚀 **Custom RenderObject**: Only the active child — and the outgoing child during a transition — is painted and sizes the stack. Attached children are still laid out (Flutter's layout contract requires it), while lazy initialization keeps unvisited pages from being built at all.
-- ⚡ **Native Animations**: Fade, FadeThrough, ScaleIn, and SharedAxis transitions built without external dependencies
+- ⚡ **Native Animations**: Fade, FadeThrough, ScaleIn, and SharedAxis transitions with pure Flutter APIs (no animation package dependency)
 - 💾 **LRU Cache**: Configurable `maxCachedPages` with automatic least-recently-used eviction
 - 🧹 **Memory Pressure**: Automatic cache flush on OS memory warnings via `WidgetsBindingObserver`
 - 🔄 **TickerMode**: Animations in background tabs are automatically paused
@@ -15,7 +15,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 
 ```yaml
 dependencies:
-  indexd_stack_dev: ^0.2.0
+  indexd_stack_dev: ^0.3.0
 ```
 
 ```bash
@@ -96,7 +96,7 @@ LazyLoadIndexedStack(
 | `none` | Instant switch, zero allocation (default) |
 | `fade` | Simple crossfade |
 | `fadeThrough` | Material Design fade through (scale + fade) |
-| `scaleIn` | Quiet iOS-style settle: fade + tiny bilateral scale (`0.992`↔`1.0`), no slide. Prefer ~320ms. |
+| `scaleIn` | Quiet iOS settle (same as ant `AntTabPageTransition`): fade + tiny bilateral scale (`0.992`↔`1.0`). Prefer ~320ms. |
 | `sharedAxisHorizontal` | Slide + fade on the X axis |
 | `sharedAxisVertical` | Slide + fade on the Y axis |
 

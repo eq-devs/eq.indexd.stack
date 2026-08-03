@@ -4,10 +4,10 @@ import 'package:flutter/widgets.dart';
 
 part 'util.dart';
 
-/// Soft iOS-like settle curve (close to UIKit continuous).
+/// Soft iOS-like settle curve — same as ant `AntTabPageTransition`.
 const Curve _kScaleInCurve = Cubic(0.22, 1.0, 0.36, 1.0);
 
-/// Quiet scale offset for tab page settle.
+/// Quiet scale offset — same as ant `AntTabPageTransition` (`0.992` ↔ `1.0`).
 const double _kScaleInBegin = 0.992;
 
 enum IndexdAnimationType {
@@ -64,8 +64,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   Animation<double>? _acReverse;
   Animation<double>? _outFadeReverse;
 
-  // What the cached animations were built for; only the shared-axis types
-  // depend on direction.
   IndexdAnimationType? _builtForAnimation;
   bool _builtForForward = true;
 
@@ -78,20 +76,17 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     super.initState();
     _currentIndex = widget.controller.currentIndex;
     _previousIndex = _currentIndex;
-
     _setupAnimationControllerIfNeeded();
-
     widget.controller.addListener(_onControllerChanged);
   }
 
   void _setupAnimationControllerIfNeeded() {
-    if (widget.animation != IndexdAnimationType.none) {
-      _animController = AnimationController(
-        vsync: this,
-        duration: widget.animationDuration,
-        value: 1.0,
-      )..addStatusListener(_onAnimationStatus);
-    }
+    if (widget.animation == IndexdAnimationType.none) return;
+    _animController = AnimationController(
+      vsync: this,
+      duration: widget.animationDuration,
+      value: 1.0,
+    )..addStatusListener(_onAnimationStatus);
   }
 
   void _onAnimationStatus(AnimationStatus status) {
@@ -107,10 +102,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       oldWidget.controller.removeListener(_onControllerChanged);
       widget.controller.addListener(_onControllerChanged);
 
-      // Re-sync state from the new controller; otherwise build() would read
-      // the new controller's loadedIndexes while rendering the old index.
-      // Settle any in-flight transition from the old controller so the new
-      // page appears fully resolved rather than mid-animation.
       _animController?.stop();
       _animController?.value = 1.0;
       _currentIndex = widget.controller.currentIndex;
@@ -124,9 +115,11 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _animController?.removeStatusListener(_onAnimationStatus);
         _animController?.dispose();
         _animController = null;
+        _previousIndex = _currentIndex;
       } else if (_animController == null) {
         _setupAnimationControllerIfNeeded();
       }
+      _buildVersion.value++;
     }
 
     if (oldWidget.animationDuration != widget.animationDuration &&
@@ -138,19 +131,19 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   void _onControllerChanged() {
     final newIndex = widget.controller.currentIndex;
     if (newIndex != _currentIndex) {
-      if (mounted) {
+      if (!mounted) return;
+      _previousIndex = _currentIndex;
+      _currentIndex = newIndex;
+      _isForward = newIndex > _previousIndex;
+
+      if (widget.animation != IndexdAnimationType.none &&
+          _animController != null) {
+        _ensureCachedAnimations();
+        _animController!.forward(from: 0.0);
+      } else {
         _previousIndex = _currentIndex;
-        _currentIndex = newIndex;
-        _isForward = newIndex > _previousIndex;
-
-        if (widget.animation != IndexdAnimationType.none &&
-            _animController != null) {
-          _ensureCachedAnimations();
-          _animController!.forward(from: 0.0);
-        }
-
-        _buildVersion.value++;
       }
+      _buildVersion.value++;
     } else {
       _buildVersion.value++;
     }
@@ -196,8 +189,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         break;
 
       case IndexdAnimationType.scaleIn:
-        // Quiet fade + tiny bilateral scale. One shared settle curve; outgoing
-        // opacity is the exact complement (constant luminance, no "dip").
+        // Pure Flutter equivalent of ant `AntTabPageTransition`.
         _inScale = CurvedAnimation(
           parent: ac,
           curve: _kScaleInCurve,
@@ -288,11 +280,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           const SizedBox.shrink(),
         );
 
-        // While a transition is running, keep the outgoing page in the tree so
-        // it can animate out — even if the controller has already evicted it
-        // (e.g. disposeUnused, or a full cache that dropped it). Otherwise its
-        // slot would be an empty box and the exit animation would play on
-        // nothing.
         final bool isAnimating = _animController?.isAnimating ?? false;
         final Iterable<int> renderIndexes = (isAnimating &&
                 _previousIndex >= 0 &&
@@ -301,52 +288,47 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
             : loadedIndexes;
 
         for (final i in renderIndexes) {
-          if (i < widget.children.length) {
-            final isIncoming = i == _currentIndex;
+          if (i >= widget.children.length) continue;
 
-            if (widget.animation == IndexdAnimationType.none ||
-                _animController == null) {
-              visibleChildren[i] = TickerMode(
-                enabled: isIncoming,
-                child: RepaintBoundary(child: widget.children[i]),
-              );
-              continue;
-            }
+          final isIncoming = i == _currentIndex;
 
-            final isOutgoing = i == _previousIndex;
-            final isAnimating = _animController!.isAnimating;
-            final isParticipating = isIncoming || (isOutgoing && isAnimating);
-
-            // The boundary lets the compositor reuse each page's cached
-            // raster during transitions instead of repainting the page's
-            // contents every animation frame.
-            Widget child = TickerMode(
-              enabled: isParticipating,
+          if (widget.animation == IndexdAnimationType.none ||
+              _animController == null) {
+            visibleChildren[i] = TickerMode(
+              enabled: isIncoming,
               child: RepaintBoundary(child: widget.children[i]),
             );
-
-            child = AnimatedBuilder(
-              animation: isParticipating
-                  ? _animController!
-                  : const AlwaysStoppedAnimation<double>(0.0),
-              builder: (context, child) {
-                return _buildTransition(
-                  child!,
-                  isIncoming,
-                  isParticipating,
-                );
-              },
-              child: child,
-            );
-
-            visibleChildren[i] = child;
+            continue;
           }
+
+          final isOutgoing = i == _previousIndex;
+          final isParticipating = isIncoming || (isOutgoing && isAnimating);
+
+          Widget child = TickerMode(
+            enabled: isParticipating,
+            child: RepaintBoundary(child: widget.children[i]),
+          );
+
+          child = AnimatedBuilder(
+            animation: isParticipating
+                ? _animController!
+                : const AlwaysStoppedAnimation<double>(0.0),
+            builder: (context, child) {
+              return _buildTransition(
+                child!,
+                isIncoming,
+                isParticipating,
+              );
+            },
+            child: child,
+          );
+
+          visibleChildren[i] = child;
         }
 
         return _LazyRenderStack(
           index: _currentIndex,
-          previousIndex:
-              (_animController?.isAnimating ?? false) ? _previousIndex : -1,
+          previousIndex: isAnimating ? _previousIndex : -1,
           alignment: widget.alignment,
           textDirection:
               widget.textDirection ?? Directionality.maybeOf(context),
@@ -387,6 +369,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         );
 
       case IndexdAnimationType.scaleIn:
+        // Same structure as ant `AntTabPageTransition`.
         Animation<double> opacity;
         Animation<double> scale;
 

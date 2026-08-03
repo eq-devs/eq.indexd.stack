@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
+/// Same as ant `AntTabPageTransition`.
 const _kScaleBegin = 0.992;
 const _kDuration = Duration(milliseconds: 320);
 
@@ -99,7 +100,6 @@ void main() {
       expect(inScale, lessThan(1.0));
       expect(outScale, lessThan(1.0));
       expect(outScale, greaterThan(_kScaleBegin));
-      // Bilateral scale is complementary around the same offset.
       expect(inScale + outScale, moreOrLessEquals(1.0 + _kScaleBegin));
     });
 
@@ -211,7 +211,6 @@ void main() {
         maxCachedPages: 3,
       );
 
-      // Visit P2 so it is cached, then leave it idle while P0→P1 animates.
       controller.switchTo(2, 3);
       await tester.pumpAndSettle();
       controller.switchTo(0, 3);
@@ -368,7 +367,6 @@ void main() {
 
     testWidgets('scaleBegin API is removed from LazyLoadIndexedStack',
         (tester) async {
-      // Compile-time contract: constructing without scaleBegin must work.
       final controller = LazyStackController();
       final stack = LazyLoadIndexedStack(
         controller: controller,
