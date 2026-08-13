@@ -8,6 +8,12 @@ const Curve kScaleInCurve = Cubic(0.22, 1.0, 0.36, 1.0);
 /// Quiet scale offset for the incoming/outgoing pages (`0.992` ↔ `1.0`).
 const double kScaleInBegin = 0.992;
 
+/// Canonical [IndexdAnimationType.scaleIn] duration (tab-shell parity).
+const Duration kScaleInDuration = Duration(milliseconds: 320);
+
+/// Default duration for fade / fadeThrough / shared-axis.
+const Duration kDefaultAnimationDuration = Duration(milliseconds: 200);
+
 /// Cached curved animations for lazy-stack page transitions.
 ///
 /// Rebuild only when [IndexdAnimationType] (or shared-axis direction) changes.

@@ -18,6 +18,7 @@ void main() {
           child: Center(
             child: LazyLoadIndexedStack(
               controller: controller,
+              fit: StackFit.loose,
               children: const [
                 SizedBox(key: ValueKey('page0'), width: 100, height: 100),
                 SizedBox(key: ValueKey('page1'), width: 100, height: 100),

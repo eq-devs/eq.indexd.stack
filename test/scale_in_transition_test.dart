@@ -6,12 +6,12 @@ const _kScaleBegin = 0.992;
 const _kDuration = Duration(milliseconds: 320);
 
 Finder _scaleOf(String label) => find.ancestor(
-      of: find.text(label),
+      of: find.text(label, skipOffstage: false),
       matching: find.byType(ScaleTransition),
     );
 
 Finder _fadeOf(String label) => find.ancestor(
-      of: find.text(label),
+      of: find.text(label, skipOffstage: false),
       matching: find.byType(FadeTransition),
     );
 
@@ -22,12 +22,23 @@ double _opacity(WidgetTester tester, String label) =>
     tester.widget<FadeTransition>(_fadeOf(label)).opacity.value;
 
 Finder _tickerModeOf(String label) => find.ancestor(
-      of: find.text(label),
+      of: find.text(label, skipOffstage: false),
       matching: find.byType(TickerMode),
     );
 
-bool _tickerEnabled(WidgetTester tester, String label) =>
-    tester.widget<TickerMode>(_tickerModeOf(label)).enabled;
+bool _tickerEnabled(WidgetTester tester, String label) {
+  final element = tester.element(find.text(label, skipOffstage: false));
+  TickerMode? mode;
+  element.visitAncestorElements((ancestor) {
+    final widget = ancestor.widget;
+    if (widget is TickerMode) {
+      mode = widget;
+      return false;
+    }
+    return true;
+  });
+  return mode!.enabled;
+}
 
 Future<LazyStackController> _pumpScaleIn(
   WidgetTester tester, {
@@ -131,9 +142,8 @@ void main() {
       controller.switchTo(1, 2);
       await tester.pumpAndSettle();
 
-      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
-      expect(_opacity(tester, 'P1'), moreOrLessEquals(1.0));
       expect(find.text('P1'), findsOneWidget);
+      expect(find.byType(ScaleTransition), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
@@ -160,8 +170,8 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
-      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(find.text('P0'), findsOneWidget);
+      expect(find.byType(ScaleTransition), findsNothing);
     });
 
     testWidgets('rapid successive switches settle without errors',
@@ -177,8 +187,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('P0'), findsOneWidget);
-      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
-      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(find.byType(ScaleTransition), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -189,8 +198,7 @@ void main() {
         controller.switchTo(target, 3);
         await tester.pumpAndSettle();
         expect(find.text('P$target'), findsOneWidget);
-        expect(_scale(tester, 'P$target'), moreOrLessEquals(1.0));
-        expect(_opacity(tester, 'P$target'), moreOrLessEquals(1.0));
+        expect(find.byType(ScaleTransition), findsNothing);
       }
 
       expect(tester.takeException(), isNull);
@@ -228,9 +236,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 160));
 
       expect(controller.isLoaded(2), isTrue);
-      expect(find.text('P2'), findsOneWidget);
-      expect(_scale(tester, 'P2'), moreOrLessEquals(1.0));
-      expect(_opacity(tester, 'P2'), moreOrLessEquals(1.0));
+      expect(find.text('P2', skipOffstage: false), findsOneWidget);
+      expect(_scaleOf('P2'), findsNothing);
     });
 
     testWidgets(
@@ -325,8 +332,7 @@ void main() {
       expect(_opacity(tester, 'P1'), lessThan(1.0));
 
       await tester.pump(const Duration(milliseconds: 60));
-      expect(_opacity(tester, 'P1'), moreOrLessEquals(1.0));
-      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(find.text('P1'), findsOneWidget);
     });
 
     testWidgets('switching into scaleIn from fade works', (tester) async {
@@ -370,7 +376,7 @@ void main() {
       expect(_opacity(tester, 'P1'), moreOrLessEquals(0.0));
 
       await tester.pumpAndSettle();
-      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(find.text('P1'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -409,7 +415,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('scaleBegin API is removed from LazyLoadIndexedStack',
+    testWidgets('scaleIn defaults duration to kScaleInDuration when omitted',
         (tester) async {
       final controller = LazyStackController();
       final stack = LazyLoadIndexedStack(
@@ -419,8 +425,52 @@ void main() {
       );
 
       expect(stack.animation, IndexdAnimationType.scaleIn);
-      expect(stack.animationDuration, const Duration(milliseconds: 200));
+      expect(stack.animationDuration, isNull);
+      expect(kScaleInDuration, const Duration(milliseconds: 320));
       controller.dispose();
+    });
+
+    testWidgets('scaleIn opacity/scale track ant formulas at sample times',
+        (tester) async {
+      final controller = await _pumpScaleIn(tester, pageCount: 2);
+
+      double curved(double t) => const Cubic(0.22, 1.0, 0.36, 1.0).transform(t);
+
+      void expectAt(double t) {
+        final c = curved(t);
+        expect(_opacity(tester, 'P1'), moreOrLessEquals(c, epsilon: 0.02));
+        expect(_opacity(tester, 'P0'), moreOrLessEquals(1 - c, epsilon: 0.02));
+        expect(
+          _scale(tester, 'P1'),
+          moreOrLessEquals(
+            _kScaleBegin + (1.0 - _kScaleBegin) * c,
+            epsilon: 0.002,
+          ),
+        );
+        expect(
+          _scale(tester, 'P0'),
+          moreOrLessEquals(
+            1.0 + (_kScaleBegin - 1.0) * c,
+            epsilon: 0.002,
+          ),
+        );
+      }
+
+      controller.switchTo(1, 2);
+      await tester.pump(); // t ≈ 0
+      expectAt(0.0);
+
+      await tester.pump(const Duration(milliseconds: 80)); // 0.25 of 320
+      expectAt(0.25);
+
+      await tester.pump(const Duration(milliseconds: 80)); // 0.5
+      expectAt(0.5);
+
+      await tester.pump(const Duration(milliseconds: 80)); // 0.75
+      expectAt(0.75);
+
+      await tester.pump(const Duration(milliseconds: 79)); // ~1.0, still in-flight
+      expectAt(0.996875);
     });
   });
 }

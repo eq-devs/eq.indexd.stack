@@ -1,11 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
 void main() {
-  timeDilation = 5.0;
+  // Do not leave timeDilation on in production. 3x is fine for inspecting
+  // the settle; ant also looks this slow under the same dilation.
+  // timeDilation = 3.0;
+
   runApp(const ComplexLazyStackDemo());
 }
 
@@ -92,7 +95,6 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
       body: LazyLoadIndexedStack(
         controller: mainController,
         animation: _currentAnimation,
-        animationDuration: const Duration(milliseconds: 320),
         children: [
           HeavyFeedPage(onAction: () => _logMemory("Feed list scrolled/acted")),
           ExploreGridPage(onLoad: () => _logMemory("Explore grid loaded")),
@@ -119,6 +121,7 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
             child: BottomNavigationBar(
               currentIndex: mainController.currentIndex,
               onTap: (index) {
+                HapticFeedback.selectionClick();
                 _logMemory("Switched to Tab $index");
                 mainController.switchTo(index, 4);
               },
@@ -127,23 +130,25 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
               selectedItemColor: Colors.deepPurpleAccent,
               unselectedItemColor: Colors.white54,
               type: BottomNavigationBarType.fixed,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.dynamic_feed),
-                  label: 'Feed',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.explore),
-                  label: 'Explore',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person),
-                  label: 'Profile',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.settings),
-                  label: 'Settings',
-                ),
+              items: [
+                for (final spec in const [
+                  (Icons.dynamic_feed, 'Feed'),
+                  (Icons.explore, 'Explore'),
+                  (Icons.person, 'Profile'),
+                  (Icons.settings, 'Settings'),
+                ])
+                  BottomNavigationBarItem(
+                    icon: Icon(spec.$1),
+                    activeIcon: Icon(spec.$1, size: 26)
+                        .animate(onPlay: (c) => c.forward())
+                        .scale(
+                          begin: const Offset(1, 1),
+                          end: const Offset(1.08, 1.08),
+                          duration: 380.ms,
+                          curve: Curves.easeOutBack,
+                        ),
+                    label: spec.$2,
+                  ),
               ],
             ),
           ),
@@ -298,7 +303,7 @@ class _HeavyFeedPageState extends State<HeavyFeedPage>
             ),
           );
         },
-      ).animate().shake(),
+      ),
     );
   }
 
@@ -373,7 +378,7 @@ class _ExploreGridPageState extends State<ExploreGridPage> {
           ),
         );
       },
-    ).animate().shake();
+    );
   }
 }
 
@@ -458,7 +463,7 @@ class _PremiumProfilePageState extends State<PremiumProfilePage> {
           ),
         ],
       ),
-    ).animate().shake();
+    );
   }
 
   Widget _buildStat(String label, String value) {
@@ -602,6 +607,6 @@ class SettingsSimulatorPage extends StatelessWidget {
           ),
         ),
       ],
-    ).animate().shake();
+    );
   }
 }

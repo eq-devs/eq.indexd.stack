@@ -15,7 +15,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 
 ```yaml
 dependencies:
-  indexd_stack_dev: ^0.3.1
+  indexd_stack_dev: ^0.4.0
 ```
 
 ```bash
@@ -57,9 +57,8 @@ class _MyAppState extends State<MyApp> {
     return Scaffold(
       body: LazyLoadIndexedStack(
         controller: controller,
-        // Tab shell: scaleIn @ ~320ms. Use .none for zero overhead (package default).
+        // Tab shell: scaleIn defaults to 320ms, expand, outgoingOnTop.
         animation: IndexdAnimationType.scaleIn,
-        animationDuration: const Duration(milliseconds: 320),
         children: [
           HomePage(),
           ProfilePage(),
@@ -87,8 +86,7 @@ Pass `IndexdAnimationType` to control tab transitions:
 ```dart
 LazyLoadIndexedStack(
   controller: controller,
-  animation: IndexdAnimationType.scaleIn,
-  animationDuration: const Duration(milliseconds: 320),
+  animation: IndexdAnimationType.scaleIn, // duration → kScaleInDuration (320ms)
   children: [...],
 )
 ```
@@ -97,13 +95,15 @@ LazyLoadIndexedStack(
 
 | Use case | Type | Duration |
 |---|---|---|
-| Bottom-nav / tab shell (recommended) | `scaleIn` | ~320ms |
-| Light crossfade | `fade` | ~200–250ms |
+| Bottom-nav / tab shell (recommended) | `scaleIn` | **320ms** (type default) |
+| Light crossfade | `fade` | ~200–250ms (type default 200ms) |
 | Material-style switch | `fadeThrough` | ~200–250ms |
 | Directional / spatial motion | `sharedAxisHorizontal` or `sharedAxisVertical` | ~200–250ms |
 | Zero overhead | `none` (package default) | n/a |
 
 Prefer `scaleIn` or `fade` for main tabs. Reserve shared-axis for flows where axis direction should feel intentional — it paints two moving pages and costs a bit more than fade/scaleIn.
+
+`scaleIn` also defaults to full-bleed (`StackFit.expand`) and `IndexdPaintOrder.stack` (same as Flutter `Stack` / ant: higher tab index on top). Pages should be **opaque** (a `ColoredBox` / `Scaffold` background) — transparent lists ghost during the fade and will never look like ant. Tab icon springs / haptics stay in the host app (see `example/lib/ant_mirror_demo.dart`).
 
 ### Types
 
@@ -112,13 +112,13 @@ Prefer `scaleIn` or `fade` for main tabs. Reserve shared-axis for flows where ax
 | `none` | Instant switch, zero allocation (**package default**) | — |
 | `fade` | Simple crossfade | ~200–250ms |
 | `fadeThrough` | Material Design fade through (scale + fade) | ~200–250ms |
-| `scaleIn` | Quiet iOS settle (fade + tiny bilateral scale `0.992`↔`1.0`) | ~320ms |
+| `scaleIn` | Quiet iOS settle (fade + tiny bilateral scale `0.992`↔`1.0`) | **320ms** |
 | `sharedAxisHorizontal` | Slide + fade on the X axis | ~200–250ms |
 | `sharedAxisVertical` | Slide + fade on the Y axis | ~200–250ms |
 
 Animation type can be changed dynamically at runtime. Switching to `none` immediately disposes the `AnimationController`.
 
-> The widget default `animationDuration` is **200ms** (fine for fade / shared-axis). For `scaleIn` tab shells, pass **320ms** explicitly.
+> Omit `animationDuration` to use type defaults (`scaleIn` → 320ms, others → 200ms). Pass an explicit duration to override.
 
 ## API Reference
 
@@ -158,7 +158,9 @@ LazyLoadIndexedStack({
   required LazyStackController controller,
   required List<Widget> children,
   IndexdAnimationType animation = IndexdAnimationType.none,
-  Duration animationDuration = const Duration(milliseconds: 200),
+  Duration? animationDuration, // null → type default (scaleIn 320ms, else 200ms)
+  StackFit fit = StackFit.expand,
+  IndexdPaintOrder? paintOrder, // null → outgoingOnTop for scaleIn
   AlignmentGeometry alignment = AlignmentDirectional.topStart,
   TextDirection? textDirection,
 })
@@ -171,6 +173,7 @@ lib/
   indexd_stack_dev.dart          # public exports
   src/
     indexd_animation_type.dart
+    indexd_paint_order.dart
     controller/lazy_stack_controller.dart
     widgets/lazy_load_indexed_stack.dart
     transitions/stack_transition_animations.dart
@@ -180,8 +183,8 @@ LazyLoadIndexedStack
   └── AnimationController? (null when animation == none)
   └── StackTransitionAnimations (cached curves)
   └── LazyRenderStack / RenderLazyStack
-       ├── performLayout: active + transitioning size the stack
-       ├── paint: outgoing first, incoming on top
+       ├── performLayout: expand participating pages (StackFit.expand)
+       ├── paint: scaleIn defaults to outgoing on top
        └── hitTest: only active child receives touches
 ```
 
