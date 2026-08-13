@@ -28,11 +28,11 @@ final class LazyLoadIndexedStack extends StatefulWidget {
   final Duration? animationDuration;
 
   /// How participating pages are sized. Defaults to [StackFit.expand] so
-  /// quiet scale transitions read as full-bleed (ant tab-shell parity).
+  /// quiet scale transitions read as full-bleed.
   final StackFit fit;
 
   /// Which page paints on top during a transition. When `null`:
-  /// - [IndexdAnimationType.scaleIn] → [IndexdPaintOrder.stack] (ant / Flutter Stack)
+  /// - [IndexdAnimationType.scaleIn] → [IndexdPaintOrder.stack] (Flutter Stack)
   /// - others → [IndexdPaintOrder.incomingOnTop]
   final IndexdPaintOrder? paintOrder;
 
@@ -199,8 +199,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     );
   }
 
-  /// Same motion as ant (`ScaleInPageTransition` + `Offstage` + index-order
-  /// [Stack]). [FadeTransition] / [ScaleTransition] listen to the controller
+  /// `ScaleInPageTransition` + `Offstage` + index-order [Stack].
+  /// [FadeTransition] / [ScaleTransition] listen to the controller
   /// themselves — do **not** wrap this in [AnimatedBuilder] or the whole
   /// stack rebuilds every tick.
   Widget _buildScaleInStack() {

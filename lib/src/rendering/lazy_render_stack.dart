@@ -160,8 +160,8 @@ class RenderLazyStack extends RenderBox
     // laid out with parentUsesSize: true. Hidden children use
     // parentUsesSize: false, which makes each one its own relayout boundary.
     //
-    // [StackFit.expand] matches ant's tab shell: participating pages fill the
-    // viewport so the quiet 0.992 scale reads as a full-bleed settle.
+    // [StackFit.expand]: participating pages fill the viewport so the quiet
+    // 0.992 scale reads as a full-bleed settle.
     RenderBox? activeChild;
     RenderBox? previousChild;
     Size maxSize = Size.zero;
@@ -275,7 +275,7 @@ class RenderLazyStack extends RenderBox
         paintChild(previousChild);
         paintChild(activeChild);
       case IndexdPaintOrder.stack:
-        // Flutter Stack / ant: higher child index paints on top.
+        // Flutter Stack: higher child index paints on top.
         if (_previousIndex >= 0 && _previousIndex > _index) {
           paintChild(activeChild);
           paintChild(previousChild);

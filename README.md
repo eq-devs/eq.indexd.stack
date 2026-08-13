@@ -103,7 +103,7 @@ LazyLoadIndexedStack(
 
 Prefer `scaleIn` or `fade` for main tabs. Reserve shared-axis for flows where axis direction should feel intentional — it paints two moving pages and costs a bit more than fade/scaleIn.
 
-`scaleIn` also defaults to full-bleed (`StackFit.expand`) and `IndexdPaintOrder.stack` (same as Flutter `Stack` / ant: higher tab index on top). Pages should be **opaque** (a `ColoredBox` / `Scaffold` background) — transparent lists ghost during the fade and will never look like ant. Tab icon springs / haptics stay in the host app (see `example/lib/ant_mirror_demo.dart`).
+`scaleIn` also defaults to full-bleed (`StackFit.expand`) and `IndexdPaintOrder.stack` (same as Flutter `Stack`: higher tab index on top). Pages should be **opaque** (a `ColoredBox` / `Scaffold` background) — transparent lists ghost during the fade. Tab icon springs / haptics stay in the host app.
 
 ### Types
 

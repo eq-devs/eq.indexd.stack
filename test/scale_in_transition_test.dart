@@ -430,7 +430,7 @@ void main() {
       controller.dispose();
     });
 
-    testWidgets('scaleIn opacity/scale track ant formulas at sample times',
+    testWidgets('scaleIn opacity/scale track scaleIn formulas at sample times',
         (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 

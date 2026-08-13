@@ -1,8 +1,8 @@
 ## 0.3.2
 
 ### ✨ Updates
-- **`scaleIn` ant-parity compositing**: participating pages use `StackFit.expand` (full-bleed) by default so the quiet `0.992` scale reads as a viewport settle, not a floating card shrink.
-- **`scaleIn` paint order**: defaults to `IndexdPaintOrder.stack` (Flutter `Stack` / ant: higher tab index on top). Override with `paintOrder:`.
+- **`scaleIn` compositing**: participating pages use `StackFit.expand` (full-bleed) by default so the quiet `0.992` scale reads as a viewport settle, not a floating card shrink.
+- **`scaleIn` paint order**: defaults to `IndexdPaintOrder.stack` (Flutter `Stack`: higher tab index on top). Override with `paintOrder:`.
 - **`scaleIn` uses Flutter `Stack` + `Offstage`** (`_buildScaleInStack`); other types keep `RenderLazyStack`. The stack is **not** rebuilt every frame — `FadeTransition` / `ScaleTransition` tick on their own.
 - **Type-default duration**: omit `animationDuration` and `scaleIn` uses `kScaleInDuration` (320ms); fade / shared-axis use `kDefaultAnimationDuration` (200ms).
 
@@ -11,7 +11,7 @@
 
 ### 📝 Docs / example
 - Exported `kScaleInCurve`, `kScaleInBegin`, `kScaleInDuration`, `kDefaultAnimationDuration`.
-- Example ships `AntMirrorDemo` (light shell + haptic + icon spring) as the motion A/B against ant.
+- Example uses `ComplexLazyStackDemo` with `scaleIn` as the default tab transition.
 
 ## 0.3.1
 

@@ -4,8 +4,8 @@ import 'stack_transition_animations.dart';
 
 /// Quiet tab switch: fade + tiny scale only — no horizontal slide.
 ///
-/// Same recipe as ant `AntTabPageTransition`. Owns the [CurvedAnimation] so
-/// [FadeTransition] / [ScaleTransition] can tick without rebuilding the stack.
+/// Owns the [CurvedAnimation] so [FadeTransition] / [ScaleTransition] can
+/// tick without rebuilding the stack.
 class ScaleInPageTransition extends StatefulWidget {
   const ScaleInPageTransition({
     super.key,

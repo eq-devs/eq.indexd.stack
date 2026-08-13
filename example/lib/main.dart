@@ -5,10 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
 
 void main() {
-  // Do not leave timeDilation on in production. 3x is fine for inspecting
-  // the settle; ant also looks this slow under the same dilation.
-  // timeDilation = 3.0;
-
+  // timeDilation = 3.0; // inspect the settle in slow motion
   runApp(const ComplexLazyStackDemo());
 }
 
