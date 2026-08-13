@@ -58,6 +58,10 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   int _previousIndex = -1;
   int _currentIndex = 0;
   bool _isForward = true;
+  /// True between `forward()` and `completed`. Not read from
+  /// [AnimationController.isAnimating] inside the build, so the scaleIn
+  /// [Stack] is not rebuilt every frame.
+  bool _pageAnimating = false;
 
   final ValueNotifier<int> _buildVersion = ValueNotifier<int>(0);
   final StackTransitionAnimations _transitions = StackTransitionAnimations();
@@ -95,6 +99,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
   void _onAnimationStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
+      _pageAnimating = false;
       _previousIndex = _currentIndex;
       if (widget.animation == IndexdAnimationType.scaleIn) {
         _animController?.value = 0;
@@ -112,6 +117,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
       _animController?.stop();
       _animController?.value = 0;
+      _pageAnimating = false;
       _currentIndex = widget.controller.currentIndex;
       _previousIndex = _currentIndex;
       _buildVersion.value++;
@@ -123,6 +129,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _animController?.removeStatusListener(_onAnimationStatus);
         _animController?.dispose();
         _animController = null;
+        _pageAnimating = false;
         _previousIndex = _currentIndex;
       } else if (_animController == null) {
         _setupAnimationControllerIfNeeded();
@@ -151,6 +158,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
       if (widget.animation != IndexdAnimationType.none &&
           _animController != null) {
+        _pageAnimating = true;
         _transitions.ensureBuilt(
           animation: widget.animation,
           isForward: _isForward,
@@ -158,6 +166,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         );
         _animController!.forward(from: 0.0);
       } else {
+        _pageAnimating = false;
         _previousIndex = _currentIndex;
       }
       _buildVersion.value++;
@@ -190,34 +199,33 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     );
   }
 
+  /// Same motion as ant (`ScaleInPageTransition` + `Offstage` + index-order
+  /// [Stack]). [FadeTransition] / [ScaleTransition] listen to the controller
+  /// themselves — do **not** wrap this in [AnimatedBuilder] or the whole
+  /// stack rebuilds every tick.
   Widget _buildScaleInStack() {
     final controller = _animController!;
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final loadedIndexes = widget.controller.loadedIndexes;
-        final bool animating = controller.isAnimating;
-        return Stack(
-          fit: widget.fit,
-          alignment: widget.alignment,
-          clipBehavior: Clip.hardEdge,
-          children: [
-            for (var i = 0; i < widget.children.length; i++)
-              _ScaleInLayer(
-                index: i,
-                current: _currentIndex,
-                fromIndex: _previousIndex,
-                toIndex: _currentIndex,
-                animating: animating,
-                animation: controller,
-                child: (loadedIndexes.contains(i) ||
-                        (animating && i == _previousIndex))
-                    ? widget.children[i]
-                    : const SizedBox.shrink(),
-              ),
-          ],
-        );
-      },
+    final loadedIndexes = widget.controller.loadedIndexes;
+    final bool animating = _pageAnimating;
+    return Stack(
+      fit: widget.fit,
+      alignment: widget.alignment,
+      clipBehavior: Clip.hardEdge,
+      children: [
+        for (var i = 0; i < widget.children.length; i++)
+          if (loadedIndexes.contains(i) ||
+              (animating && i == _previousIndex))
+            _ScaleInLayer(
+              key: ValueKey<int>(i),
+              index: i,
+              current: _currentIndex,
+              fromIndex: _previousIndex,
+              toIndex: _currentIndex,
+              animating: animating,
+              animation: controller,
+              child: widget.children[i],
+            ),
+      ],
     );
   }
 
@@ -282,6 +290,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
 class _ScaleInLayer extends StatelessWidget {
   const _ScaleInLayer({
+    super.key,
     required this.index,
     required this.current,
     required this.fromIndex,
