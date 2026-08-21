@@ -86,6 +86,15 @@ void main() {
       expect(offset.dy, moreOrLessEquals(0.0));
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+        'scaleIn: initial page is fully opaque and full scale on first pump',
+        (tester) async {
+      await _pump(tester, IndexdAnimationType.scaleIn);
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('didUpdateWidget: idle page re-settles when animation type changes',
@@ -138,6 +147,31 @@ void main() {
       expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
       final offset = _slide(tester, 'P0');
       expect(offset.dx, moreOrLessEquals(0.0));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('fade -> scaleIn while idle re-settles (existing controller)',
+        (tester) async {
+      final controller = LazyStackController();
+      Widget build(IndexdAnimationType animation) => Directionality(
+            textDirection: TextDirection.ltr,
+            child: LazyLoadIndexedStack(
+              controller: controller,
+              animation: animation,
+              children: const [
+                Center(child: Text('P0')),
+                Center(child: Text('P1')),
+              ],
+            ),
+          );
+
+      await tester.pumpWidget(build(IndexdAnimationType.fade));
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(build(IndexdAnimationType.scaleIn));
+
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
       expect(tester.takeException(), isNull);
     });
   });

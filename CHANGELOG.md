@@ -1,3 +1,9 @@
+## Unreleased
+
+### ⚡ Performance
+- **`scaleIn` now shares `RenderLazyStack`** with every other animation type instead of a dedicated Flutter `Stack` + `Offstage` tree. Flutter's `RenderStack`/`RenderOffstage` always lay out non-positioned/offstage children with `parentUsesSize: true`, so a hidden cached page could never become its own relayout boundary — any internal `markNeedsLayout()` from an inactive tab (async image load, keyboard inset, list content change…) bubbled up and forced the whole stack to re-layout. `RenderLazyStack` gives active/previous children `parentUsesSize: true` and every other cached child `parentUsesSize: false`, containing that dirty-layout propagation to the hidden page itself. `_ScaleInLayer` / `ScaleInPageTransition` are removed; `scaleIn`'s fade + tiny bilateral scale is unchanged, driven by the same `StackTransitionAnimations` tweens/curves the other types already used (`IndexdPaintOrder.stack` was already the `scaleIn` default, now actually wired through `RenderLazyStack`).
+- Idle/non-participating pages under `scaleIn` are now always wrapped in an inert (`AlwaysStoppedAnimation`) `FadeTransition`/`ScaleTransition`, matching the other animation types — no compositing cost while inert, and no more per-switch `StackTransitionAnimations` tweens/curves being built and left unused (they were being rebuilt on every switch even though `_buildScaleInStack` never consumed them).
+
 ## 0.3.2
 
 ### ✨ Updates

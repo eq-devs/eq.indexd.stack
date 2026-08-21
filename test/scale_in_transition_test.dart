@@ -143,7 +143,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('P1'), findsOneWidget);
-      expect(find.byType(ScaleTransition), findsNothing);
+      expect(_scale(tester, 'P1'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P1'), moreOrLessEquals(1.0));
       expect(tester.takeException(), isNull);
     });
   });
@@ -171,7 +172,8 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(find.text('P0'), findsOneWidget);
-      expect(find.byType(ScaleTransition), findsNothing);
+      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
     });
 
     testWidgets('rapid successive switches settle without errors',
@@ -187,7 +189,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('P0'), findsOneWidget);
-      expect(find.byType(ScaleTransition), findsNothing);
+      expect(_scale(tester, 'P0'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P0'), moreOrLessEquals(1.0));
       expect(tester.takeException(), isNull);
     });
 
@@ -198,7 +201,8 @@ void main() {
         controller.switchTo(target, 3);
         await tester.pumpAndSettle();
         expect(find.text('P$target'), findsOneWidget);
-        expect(find.byType(ScaleTransition), findsNothing);
+        expect(_scale(tester, 'P$target'), moreOrLessEquals(1.0));
+        expect(_opacity(tester, 'P$target'), moreOrLessEquals(1.0));
       }
 
       expect(tester.takeException(), isNull);
@@ -237,7 +241,8 @@ void main() {
 
       expect(controller.isLoaded(2), isTrue);
       expect(find.text('P2', skipOffstage: false), findsOneWidget);
-      expect(_scaleOf('P2'), findsNothing);
+      expect(_scale(tester, 'P2'), moreOrLessEquals(1.0));
+      expect(_opacity(tester, 'P2'), moreOrLessEquals(1.0));
     });
 
     testWidgets(
