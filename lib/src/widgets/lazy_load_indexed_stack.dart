@@ -95,6 +95,25 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       vsync: this,
       duration: _effectiveDuration,
     )..addStatusListener(_onAnimationStatus);
+    _settleIdleController();
+  }
+
+  /// Forces the controller + [_transitions] into the "just finished a
+  /// forward transition into this page" state, synchronously, so the
+  /// idle initial/current page never renders through a null/zero-value
+  /// fallback in [StackTransitionAnimations.wrap]. No-op for
+  /// [IndexdAnimationType.scaleIn], whose idle rendering never reads the
+  /// controller (see `_ScaleInLayer`).
+  void _settleIdleController() {
+    if (widget.animation == IndexdAnimationType.scaleIn) return;
+    _transitions.ensureBuilt(
+      animation: widget.animation,
+      isForward: true,
+      controller: _animController!,
+    );
+    if (_animController!.value != 1.0) {
+      _animController!.value = 1.0;
+    }
   }
 
   void _onAnimationStatus(AnimationStatus status) {
@@ -135,6 +154,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _setupAnimationControllerIfNeeded();
       } else {
         _animController!.duration = _effectiveDuration;
+        if (!_pageAnimating) {
+          _settleIdleController();
+        }
       }
       _buildVersion.value++;
     } else if (oldWidget.animationDuration != widget.animationDuration &&
