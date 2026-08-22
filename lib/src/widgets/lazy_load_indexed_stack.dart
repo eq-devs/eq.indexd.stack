@@ -83,6 +83,15 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   void initState() {
     super.initState();
     _currentIndex = widget.controller.currentIndex;
+    assert(
+      _currentIndex >= 0 && _currentIndex < widget.children.length,
+      'LazyStackController.currentIndex ($_currentIndex) is out of range '
+      'for LazyLoadIndexedStack.children (length ${widget.children.length}). '
+      'The controller has no reference to children.length — check that every '
+      'switchTo/preloadPage/preloadAdjacentPages call passes a totalPages '
+      'that matches children.length, especially if the tab count can change '
+      'at runtime.',
+    );
     _previousIndex = _currentIndex;
     _setupAnimationControllerIfNeeded();
     widget.controller.addListener(_onControllerChanged);
@@ -164,9 +173,19 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   }
 
   void _onControllerChanged() {
+    if (!mounted) return;
     final newIndex = widget.controller.currentIndex;
+    assert(
+      newIndex >= 0 && newIndex < widget.children.length,
+      'LazyStackController.currentIndex ($newIndex) is out of range for '
+      'LazyLoadIndexedStack.children (length ${widget.children.length}). '
+      'The controller has no reference to children.length — check that every '
+      'switchTo/preloadPage/preloadAdjacentPages call passes a totalPages '
+      'that matches children.length, especially if the tab count can change '
+      'at runtime. Left unfixed, the stack silently stops painting and stops '
+      'responding to hit-tests for the affected page.',
+    );
     if (newIndex != _currentIndex) {
-      if (!mounted) return;
       _previousIndex = _currentIndex;
       _currentIndex = newIndex;
       _isForward = newIndex > _previousIndex;
