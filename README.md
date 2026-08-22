@@ -57,7 +57,7 @@ class _MyAppState extends State<MyApp> {
     return Scaffold(
       body: LazyLoadIndexedStack(
         controller: controller,
-        // Tab shell: scaleIn defaults to 320ms, expand, outgoingOnTop.
+        // Tab shell: scaleIn defaults to 320ms, expand, IndexdPaintOrder.stack.
         animation: IndexdAnimationType.scaleIn,
         children: [
           HomePage(),
@@ -160,7 +160,7 @@ LazyLoadIndexedStack({
   IndexdAnimationType animation = IndexdAnimationType.none,
   Duration? animationDuration, // null → type default (scaleIn 320ms, else 200ms)
   StackFit fit = StackFit.expand,
-  IndexdPaintOrder? paintOrder, // null → outgoingOnTop for scaleIn
+  IndexdPaintOrder? paintOrder, // null → IndexdPaintOrder.stack for scaleIn
   AlignmentGeometry alignment = AlignmentDirectional.topStart,
   TextDirection? textDirection,
 })
@@ -184,7 +184,7 @@ LazyLoadIndexedStack
   └── StackTransitionAnimations (cached curves)
   └── LazyRenderStack / RenderLazyStack
        ├── performLayout: expand participating pages (StackFit.expand)
-       ├── paint: scaleIn defaults to outgoing on top
+       ├── paint: scaleIn defaults to IndexdPaintOrder.stack (Flutter Stack order)
        └── hitTest: only active child receives touches
 ```
 
