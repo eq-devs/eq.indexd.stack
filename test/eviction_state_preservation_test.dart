@@ -79,7 +79,7 @@ void main() {
 
       expect(initCounts['A'], 1);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump(); // start the transition
       await tester.pump(const Duration(milliseconds: 100)); // mid-transition
 

@@ -15,6 +15,14 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   Set<int>? _loadedIndexesView;
   late final Set<int> _preloadSet = Set<int>.of(preloadIndexes);
 
+  /// Total number of pages this controller can navigate across.
+  ///
+  /// Kept in sync automatically by [LazyLoadIndexedStack] from
+  /// `children.length` — you don't need to set this yourself in normal use.
+  /// `null` (the default before a widget attaches) disables the upper-bound
+  /// check in [switchTo] / [preloadPage] / [preloadAdjacentPages].
+  int? pageCount;
+
   LazyStackController({
     int initialIndex = 0,
     this.preloadIndexes = const [],
@@ -75,11 +83,12 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void switchTo(
-    int index,
-    int totalPages,
-  ) {
-    if (index < 0 || index >= totalPages || index == _currentIndex) return;
+  void switchTo(int index) {
+    if (index < 0 ||
+        (pageCount != null && index >= pageCount!) ||
+        index == _currentIndex) {
+      return;
+    }
 
     _currentIndex = index;
     _markAsUsed(index);
@@ -152,8 +161,10 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void preloadPage(int index, int totalPages) {
-    if (index < 0 || index >= totalPages || _loadedPages.containsKey(index)) {
+  void preloadPage(int index) {
+    if (index < 0 ||
+        (pageCount != null && index >= pageCount!) ||
+        _loadedPages.containsKey(index)) {
       return;
     }
 
@@ -161,14 +172,16 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  void preloadAdjacentPages(int totalPages, [int range = 1]) {
+  void preloadAdjacentPages([int range = 1]) {
     bool changed = false;
+    final int? total = pageCount;
 
     for (int i = 1; i <= range; i++) {
       final nextIndex = _currentIndex + i;
       final prevIndex = _currentIndex - i;
 
-      if (nextIndex < totalPages && !_loadedPages.containsKey(nextIndex)) {
+      if ((total == null || nextIndex < total) &&
+          !_loadedPages.containsKey(nextIndex)) {
         _markAsUsed(nextIndex);
         changed = true;
       }

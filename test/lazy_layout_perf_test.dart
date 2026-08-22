@@ -66,19 +66,19 @@ void main() {
       );
 
       // Load all three pages so they are real, cached, attached subtrees.
-      controller.switchTo(1, 3);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
-      controller.switchTo(2, 3);
+      controller.switchTo(2);
       await tester.pumpAndSettle();
-      controller.switchTo(0, 3);
+      controller.switchTo(0);
       await tester.pumpAndSettle();
 
       final before = List<int>.from(counts);
 
       // Switch tabs with no content or constraint changes.
-      controller.switchTo(1, 3);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
-      controller.switchTo(0, 3);
+      controller.switchTo(0);
       await tester.pumpAndSettle();
 
       // Every child is clean and gets the same (tight) constraints, so

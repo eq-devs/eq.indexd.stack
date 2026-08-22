@@ -34,7 +34,7 @@ void main() {
 
       // Switch to B. The controller immediately evicts A, but it must remain
       // mounted while the fade transition runs so it can animate out.
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump(); // start the transition
       await tester.pump(const Duration(milliseconds: 100)); // mid-transition
 

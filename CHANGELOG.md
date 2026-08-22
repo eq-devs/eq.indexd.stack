@@ -1,3 +1,10 @@
+## 0.3.7
+
+### 💥 Breaking
+- **Removed the `totalPages` parameter from `switchTo`, `preloadPage`, and `preloadAdjacentPages`.** It was the root cause of the 0.3.3 out-of-range bug: a caller-supplied number with no cross-check against the widget's real `children.length`, easy to pass stale or miscalculated. `LazyStackController` now has a `pageCount` property that `LazyLoadIndexedStack` syncs automatically from `children.length` — on mount, whenever `children.length` changes, and whenever the controller is swapped — so there's a single source of truth instead of one the caller has to keep in sync by hand at every call site.
+  - Migration: `controller.switchTo(index, totalPages)` → `controller.switchTo(index)`. Same for `preloadPage(index, totalPages)` → `preloadPage(index)` and `preloadAdjacentPages(totalPages, [range])` → `preloadAdjacentPages([range])`.
+  - Bounds checking still happens — `switchTo`/`preloadPage`/`preloadAdjacentPages` now reject an index `>= pageCount` themselves, using the synced (correct) count, instead of relying on a debug-mode assert as the only backstop. The 0.3.3 assert stays in place as a last line of defense for the (now narrow) case of driving a controller without `LazyLoadIndexedStack` attached, or setting `pageCount` manually to something wrong.
+
 ## 0.3.3
 
 ### 🐛 Fixes

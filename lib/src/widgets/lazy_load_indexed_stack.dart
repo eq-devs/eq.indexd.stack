@@ -82,15 +82,12 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   @override
   void initState() {
     super.initState();
+    widget.controller.pageCount = widget.children.length;
     _currentIndex = widget.controller.currentIndex;
     assert(
       _currentIndex >= 0 && _currentIndex < widget.children.length,
       'LazyStackController.currentIndex ($_currentIndex) is out of range '
-      'for LazyLoadIndexedStack.children (length ${widget.children.length}). '
-      'The controller has no reference to children.length — check that every '
-      'switchTo/preloadPage/preloadAdjacentPages call passes a totalPages '
-      'that matches children.length, especially if the tab count can change '
-      'at runtime.',
+      'for LazyLoadIndexedStack.children (length ${widget.children.length}).',
     );
     _previousIndex = _currentIndex;
     _setupAnimationControllerIfNeeded();
@@ -134,6 +131,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.pageCount = widget.children.length;
       widget.controller.addListener(_onControllerChanged);
 
       _animController?.stop();
@@ -142,6 +140,8 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       _currentIndex = widget.controller.currentIndex;
       _previousIndex = _currentIndex;
       _buildVersion.value++;
+    } else if (oldWidget.children.length != widget.children.length) {
+      widget.controller.pageCount = widget.children.length;
     }
 
     if (oldWidget.animation != widget.animation) {
@@ -179,11 +179,11 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       newIndex >= 0 && newIndex < widget.children.length,
       'LazyStackController.currentIndex ($newIndex) is out of range for '
       'LazyLoadIndexedStack.children (length ${widget.children.length}). '
-      'The controller has no reference to children.length — check that every '
-      'switchTo/preloadPage/preloadAdjacentPages call passes a totalPages '
-      'that matches children.length, especially if the tab count can change '
-      'at runtime. Left unfixed, the stack silently stops painting and stops '
-      'responding to hit-tests for the affected page.',
+      'This should not happen — pageCount is synced automatically from '
+      'children.length — unless something set controller.pageCount manually '
+      'to a value larger than children.length. Left unfixed, the stack '
+      'silently stops painting and stops responding to hit-tests for the '
+      'affected page.',
     );
     if (newIndex != _currentIndex) {
       _previousIndex = _currentIndex;

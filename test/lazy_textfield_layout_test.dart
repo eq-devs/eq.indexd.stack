@@ -29,12 +29,12 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
 
       // Switch to B — A stays loaded (cached) and remains attached.
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
       // Switch back to A — the cached TextField subtree must still be valid.
-      controller.switchTo(0, 2);
+      controller.switchTo(0);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.byType(TextField), findsOneWidget);

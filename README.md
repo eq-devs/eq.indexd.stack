@@ -15,7 +15,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 
 ```yaml
 dependencies:
-  indexd_stack_dev: ^0.3.3
+  indexd_stack_dev: ^0.3.7
 ```
 
 ```bash
@@ -67,7 +67,7 @@ class _MyAppState extends State<MyApp> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: controller.currentIndex,
-        onTap: (index) => controller.switchTo(index, 3),
+        onTap: (index) => controller.switchTo(index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
@@ -139,15 +139,16 @@ LazyStackController({
 | `currentIndex` | `int` | Currently visible page |
 | `loadedIndexes` | `Set<int>` | Pages currently in memory |
 | `canGoBack` | `bool` | Whether current index > 0 |
+| `pageCount` | `int?` | Total pages; synced automatically from `LazyLoadIndexedStack.children.length` — don't set this yourself in normal use |
 
 | Method | Description |
 |---|---|
-| `switchTo(index, totalPages)` | Switch to a page with automatic cache management |
+| `switchTo(index)` | Switch to a page with automatic cache management |
 | `disposePage(index)` | Remove a specific page from memory |
 | `disposePages(indexes)` | Remove multiple pages from memory |
 | `reset()` | Clear all pages except current and preloaded |
-| `preloadPage(index, totalPages)` | Eagerly load a page into cache |
-| `preloadAdjacentPages(totalPages, [range])` | Preload pages adjacent to current |
+| `preloadPage(index)` | Eagerly load a page into cache |
+| `preloadAdjacentPages([range])` | Preload pages adjacent to current |
 | `isLoaded(index)` | Check if a page is in memory |
 | `didHaveMemoryPressure()` | Manually trigger memory flush |
 

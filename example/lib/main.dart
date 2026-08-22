@@ -120,7 +120,7 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
               onTap: (index) {
                 HapticFeedback.selectionClick();
                 _logMemory("Switched to Tab $index");
-                mainController.switchTo(index, 4);
+                mainController.switchTo(index);
               },
               backgroundColor: Colors.transparent,
               elevation: 0,

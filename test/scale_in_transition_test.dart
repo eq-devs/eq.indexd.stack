@@ -78,7 +78,7 @@ void main() {
         (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
 
       expect(_scale(tester, 'P1'), moreOrLessEquals(_kScaleBegin));
@@ -90,7 +90,7 @@ void main() {
     testWidgets('mid-flight opacities are exact complements', (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 160));
 
@@ -107,7 +107,7 @@ void main() {
     testWidgets('mid-flight both pages scale toward each other', (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 160));
 
@@ -124,7 +124,7 @@ void main() {
     testWidgets('fade and scale share the same progress', (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 160));
 
@@ -139,7 +139,7 @@ void main() {
         (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
 
       expect(find.text('P1'), findsOneWidget);
@@ -153,10 +153,10 @@ void main() {
     testWidgets('backward switch uses the same quiet settle', (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
 
-      controller.switchTo(0, 2);
+      controller.switchTo(0);
       await tester.pump();
 
       expect(_scale(tester, 'P0'), moreOrLessEquals(_kScaleBegin));
@@ -180,11 +180,11 @@ void main() {
         (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 3);
 
-      controller.switchTo(1, 3);
+      controller.switchTo(1);
       await tester.pump();
-      controller.switchTo(2, 3);
+      controller.switchTo(2);
       await tester.pump();
-      controller.switchTo(0, 3);
+      controller.switchTo(0);
       await tester.pump();
       await tester.pumpAndSettle();
 
@@ -198,7 +198,7 @@ void main() {
       final controller = await _pumpScaleIn(tester, pageCount: 3);
 
       for (final target in [1, 2, 0, 1]) {
-        controller.switchTo(target, 3);
+        controller.switchTo(target);
         await tester.pumpAndSettle();
         expect(find.text('P$target'), findsOneWidget);
         expect(_scale(tester, 'P$target'), moreOrLessEquals(1.0));
@@ -213,7 +213,7 @@ void main() {
     testWidgets('does not use SlideTransition', (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -230,12 +230,12 @@ void main() {
         maxCachedPages: 3,
       );
 
-      controller.switchTo(2, 3);
+      controller.switchTo(2);
       await tester.pumpAndSettle();
-      controller.switchTo(0, 3);
+      controller.switchTo(0);
       await tester.pumpAndSettle();
 
-      controller.switchTo(1, 3);
+      controller.switchTo(1);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 160));
 
@@ -255,7 +255,7 @@ void main() {
           disposeUnused: true,
         );
 
-        controller.switchTo(1, 2);
+        controller.switchTo(1);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 160));
 
@@ -276,7 +276,7 @@ void main() {
     testWidgets('ScaleTransition is centered', (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
 
       final scale = tester.widget<ScaleTransition>(_scaleOf('P1'));
@@ -289,7 +289,7 @@ void main() {
         (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
 
       expect(_tickerEnabled(tester, 'P1'), isTrue);
@@ -300,7 +300,7 @@ void main() {
         (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 160));
 
@@ -313,7 +313,7 @@ void main() {
         (tester) async {
       final controller = await _pumpScaleIn(tester, pageCount: 2);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
 
       expect(_tickerEnabled(tester, 'P1'), isTrue);
@@ -329,7 +329,7 @@ void main() {
         duration: const Duration(milliseconds: 100),
       );
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -374,7 +374,7 @@ void main() {
         ),
       );
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump();
 
       expect(_scale(tester, 'P1'), moreOrLessEquals(_kScaleBegin));
@@ -407,11 +407,11 @@ void main() {
       await tester.pumpWidget(build(IndexdAnimationType.scaleIn));
       addTearDown(controller.dispose);
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
 
       await tester.pumpWidget(build(IndexdAnimationType.none));
-      controller.switchTo(0, 2);
+      controller.switchTo(0);
       await tester.pump();
 
       expect(find.byType(ScaleTransition), findsNothing);
@@ -461,7 +461,7 @@ void main() {
         );
       }
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pump(); // t ≈ 0
       expectAt(0.0);
 

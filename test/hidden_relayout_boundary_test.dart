@@ -29,7 +29,7 @@ void main() {
       );
 
       // Cache page 0, then hide it behind page 1.
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
 
       final stackRender =
@@ -51,7 +51,7 @@ void main() {
       expect(tester.takeException(), isNull);
 
       // The hidden page still works when it becomes active again.
-      controller.switchTo(0, 2);
+      controller.switchTo(0);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(tester.getSize(find.byKey(const ValueKey('page0'))),
@@ -82,7 +82,7 @@ void main() {
         ),
       );
 
-      controller.switchTo(1, 2);
+      controller.switchTo(1);
       await tester.pumpAndSettle();
 
       final stackRender =
