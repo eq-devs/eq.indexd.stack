@@ -4,7 +4,6 @@ import '../controller/lazy_stack_controller.dart';
 import '../indexd_animation_type.dart';
 import '../indexd_paint_order.dart';
 import '../rendering/lazy_render_stack.dart';
-import '../transitions/scale_in_page_transition.dart';
 import '../transitions/stack_transition_animations.dart';
 
 /// Lazy-loading indexed stack with optional tab transitions.
@@ -58,9 +57,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   int _previousIndex = -1;
   int _currentIndex = 0;
   bool _isForward = true;
-  /// True between `forward()` and `completed`. Not read from
-  /// [AnimationController.isAnimating] inside the build, so the scaleIn
-  /// [Stack] is not rebuilt every frame.
+  /// True between `forward()` and `completed`. Only consulted in
+  /// [didUpdateWidget] — not read from [AnimationController.isAnimating]
+  /// inside [build], so the stack is not rebuilt every frame.
   bool _pageAnimating = false;
 
   final ValueNotifier<int> _buildVersion = ValueNotifier<int>(0);
@@ -84,6 +83,15 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   void initState() {
     super.initState();
     _currentIndex = widget.controller.currentIndex;
+    assert(
+      _currentIndex >= 0 && _currentIndex < widget.children.length,
+      'LazyStackController.currentIndex ($_currentIndex) is out of range '
+      'for LazyLoadIndexedStack.children (length ${widget.children.length}). '
+      'The controller has no reference to children.length — check that every '
+      'switchTo/preloadPage/preloadAdjacentPages call passes a totalPages '
+      'that matches children.length, especially if the tab count can change '
+      'at runtime.',
+    );
     _previousIndex = _currentIndex;
     _setupAnimationControllerIfNeeded();
     widget.controller.addListener(_onControllerChanged);
@@ -95,15 +103,28 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       vsync: this,
       duration: _effectiveDuration,
     )..addStatusListener(_onAnimationStatus);
+    _settleIdleController();
+  }
+
+  /// Forces the controller + [_transitions] into the "just finished a
+  /// forward transition into this page" state, synchronously, so the
+  /// idle initial/current page never renders through a null/zero-value
+  /// fallback in [StackTransitionAnimations.wrap].
+  void _settleIdleController() {
+    _transitions.ensureBuilt(
+      animation: widget.animation,
+      isForward: true,
+      controller: _animController!,
+    );
+    if (_animController!.value != 1.0) {
+      _animController!.value = 1.0;
+    }
   }
 
   void _onAnimationStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
       _pageAnimating = false;
       _previousIndex = _currentIndex;
-      if (widget.animation == IndexdAnimationType.scaleIn) {
-        _animController?.value = 0;
-      }
       _buildVersion.value++;
     }
   }
@@ -135,6 +156,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _setupAnimationControllerIfNeeded();
       } else {
         _animController!.duration = _effectiveDuration;
+        if (!_pageAnimating) {
+          _settleIdleController();
+        }
       }
       _buildVersion.value++;
     } else if (oldWidget.animationDuration != widget.animationDuration &&
@@ -149,9 +173,19 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   }
 
   void _onControllerChanged() {
+    if (!mounted) return;
     final newIndex = widget.controller.currentIndex;
+    assert(
+      newIndex >= 0 && newIndex < widget.children.length,
+      'LazyStackController.currentIndex ($newIndex) is out of range for '
+      'LazyLoadIndexedStack.children (length ${widget.children.length}). '
+      'The controller has no reference to children.length — check that every '
+      'switchTo/preloadPage/preloadAdjacentPages call passes a totalPages '
+      'that matches children.length, especially if the tab count can change '
+      'at runtime. Left unfixed, the stack silently stops painting and stops '
+      'responding to hit-tests for the affected page.',
+    );
     if (newIndex != _currentIndex) {
-      if (!mounted) return;
       _previousIndex = _currentIndex;
       _currentIndex = newIndex;
       _isForward = newIndex > _previousIndex;
@@ -189,43 +223,7 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: _buildVersion,
-      builder: (context, _, __) {
-        if (widget.animation == IndexdAnimationType.scaleIn &&
-            _animController != null) {
-          return _buildScaleInStack();
-        }
-        return _buildLazyRenderStack();
-      },
-    );
-  }
-
-  /// `ScaleInPageTransition` + `Offstage` + index-order [Stack].
-  /// [FadeTransition] / [ScaleTransition] listen to the controller
-  /// themselves — do **not** wrap this in [AnimatedBuilder] or the whole
-  /// stack rebuilds every tick.
-  Widget _buildScaleInStack() {
-    final controller = _animController!;
-    final loadedIndexes = widget.controller.loadedIndexes;
-    final bool animating = _pageAnimating;
-    return Stack(
-      fit: widget.fit,
-      alignment: widget.alignment,
-      clipBehavior: Clip.hardEdge,
-      children: [
-        for (var i = 0; i < widget.children.length; i++)
-          if (loadedIndexes.contains(i) ||
-              (animating && i == _previousIndex))
-            _ScaleInLayer(
-              key: ValueKey<int>(i),
-              index: i,
-              current: _currentIndex,
-              fromIndex: _previousIndex,
-              toIndex: _currentIndex,
-              animating: animating,
-              animation: controller,
-              child: widget.children[i],
-            ),
-      ],
+      builder: (context, _, __) => _buildLazyRenderStack(),
     );
   }
 
@@ -284,60 +282,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       fit: widget.fit,
       paintOrder: _effectivePaintOrder,
       children: visibleChildren,
-    );
-  }
-}
-
-class _ScaleInLayer extends StatelessWidget {
-  const _ScaleInLayer({
-    super.key,
-    required this.index,
-    required this.current,
-    required this.fromIndex,
-    required this.toIndex,
-    required this.animating,
-    required this.animation,
-    required this.child,
-  });
-
-  final int index;
-  final int current;
-  final int fromIndex;
-  final int toIndex;
-  final bool animating;
-  final Animation<double> animation;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final isIncoming = animating && index == toIndex;
-    final isOutgoing = animating && index == fromIndex;
-    final isActiveIdle = !animating && index == current;
-    final visible = isIncoming || isOutgoing || isActiveIdle;
-
-    if (!visible) {
-      return Offstage(
-        offstage: true,
-        child: TickerMode(enabled: false, child: child),
-      );
-    }
-
-    Widget content = TickerMode(
-      enabled: isIncoming || isActiveIdle,
-      child: child,
-    );
-
-    if (animating && (isIncoming || isOutgoing)) {
-      content = ScaleInPageTransition(
-        animation: animation,
-        isIncoming: isIncoming,
-        child: content,
-      );
-    }
-
-    return IgnorePointer(
-      ignoring: !(isIncoming || isActiveIdle),
-      child: content,
     );
   }
 }

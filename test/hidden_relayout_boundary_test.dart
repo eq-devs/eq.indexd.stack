@@ -58,4 +58,49 @@ void main() {
           const Size(100, 100));
     },
   );
+
+  testWidgets(
+    'holds for scaleIn too — it shares RenderLazyStack with the other '
+    'animation types, not a separate Stack/Offstage tree',
+    (tester) async {
+      final controller = LazyStackController(maxCachedPages: 3);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: LazyLoadIndexedStack(
+              controller: controller,
+              animation: IndexdAnimationType.scaleIn,
+              fit: StackFit.loose,
+              children: const [
+                SizedBox(key: ValueKey('page0'), width: 100, height: 100),
+                SizedBox(key: ValueKey('page1'), width: 100, height: 100),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      controller.switchTo(1, 2);
+      await tester.pumpAndSettle();
+
+      final stackRender =
+          tester.renderObject(find.byType(LazyLoadIndexedStack));
+      final hiddenRender =
+          tester.renderObject(find.byKey(const ValueKey('page0')));
+
+      expect(stackRender.debugNeedsLayout, isFalse);
+
+      hiddenRender.markNeedsLayout();
+
+      expect(hiddenRender.debugNeedsLayout, isTrue);
+      expect(stackRender.debugNeedsLayout, isFalse,
+          reason: 'a hidden scaleIn page relayout must stop at its own '
+              'boundary instead of relaying out the whole stack');
+
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
