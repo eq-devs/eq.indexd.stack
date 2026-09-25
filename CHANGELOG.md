@@ -1,3 +1,8 @@
+## 0.3.8
+
+### 🧹 Internal
+- Stop shipping a stray `CLAUDE.md` in the published package. No API or behavior changes.
+
 ## 0.3.7
 
 ### 💥 Breaking
