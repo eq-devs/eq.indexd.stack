@@ -1,3 +1,19 @@
+## 0.3.9
+
+### ⚡ Performance
+- **Preloads no longer build in the same frame as a tab switch.** `switchTo()` followed by `preloadAdjacentPages()` (or `preloadPage()`) used to build the neighbours in the same frame as the incoming page, right as the transition started. Pages newly preloaded during a switch are now built once the transition finishes, or on the next frame with `animation: none`. Preloads requested while idle still build immediately; `isLoaded()` reports them as loaded straight away.
+- **Hidden cached pages are not re-laid out while the stack resizes.** A keyboard or rotation animation changes the stack's size every frame, and every hidden cached page was laid out again each time. Hidden pages now keep their last constraints and pick up the current size when they are shown. README now recommends `MediaQuery.sizeOf` / `viewInsetsOf` over `MediaQuery.of` so hidden pages don't rebuild either.
+- **Controller notifications that don't change the cache no longer rebuild the stack** (e.g. `reset()` when only the current and preloaded pages are cached).
+- **No clip while idle.** The stack only clips while a transition runs; children are never laid out larger than the stack, so the idle clip did nothing but add a clip layer on every paint.
+- `RenderLazyStack` reuses the active/outgoing children found during layout for paint, hit-testing and semantics instead of walking the child list each time.
+- Removed redundant rebuild requests in `didUpdateWidget` (the framework already rebuilds after it).
+
+### 🐛 Fixes
+- **Changing `animation` no longer resets every cached page's State.** Each transition type wraps pages differently (`none` doesn't wrap at all), so switching types — e.g. `none` → `scaleIn`, or `fade` → `sharedAxisVertical` — recreated every cached page from scratch. Pages are now keyed so their State (and render subtree) moves to the new wrapper.
+
+### 🧹 Internal
+- `LazyStackController` stores its cache as a `LinkedHashSet<int>` instead of a `LinkedHashMap<int, bool>`.
+
 ## 0.3.8
 
 ### 🧹 Internal

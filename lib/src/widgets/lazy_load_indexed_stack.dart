@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../controller/lazy_stack_controller.dart';
@@ -57,10 +58,25 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   int _previousIndex = -1;
   int _currentIndex = 0;
   bool _isForward = true;
-  /// True between `forward()` and `completed`. Only consulted in
-  /// [didUpdateWidget] — not read from [AnimationController.isAnimating]
-  /// inside [build], so the stack is not rebuilt every frame.
+
+  /// True between `forward()` and `completed`. A plain field, not
+  /// [AnimationController.isAnimating], so the stack is not rebuilt every
+  /// frame.
   bool _pageAnimating = false;
+
+  /// True from an index change until the end of that frame. While it (or
+  /// [_pageAnimating]) is set, pages preloaded alongside the switch are held
+  /// back so they don't build in the same frame as the incoming page.
+  bool _deferPreloads = false;
+  bool _hasHeldPreloads = false;
+
+  /// Pages mounted by the last build, and the controller cache it used.
+  final Set<int> _builtIndexes = <int>{};
+  Set<int>? _builtLoadedIndexes;
+
+  /// One key per page so its State survives a change of transition wrapper
+  /// (e.g. [IndexdAnimationType.none] → [IndexdAnimationType.scaleIn]).
+  final Map<int, GlobalKey> _pageKeys = <int, GlobalKey>{};
 
   final ValueNotifier<int> _buildVersion = ValueNotifier<int>(0);
   final StackTransitionAnimations _transitions = StackTransitionAnimations();
@@ -139,7 +155,6 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       _pageAnimating = false;
       _currentIndex = widget.controller.currentIndex;
       _previousIndex = _currentIndex;
-      _buildVersion.value++;
     } else if (oldWidget.children.length != widget.children.length) {
       widget.controller.pageCount = widget.children.length;
     }
@@ -160,15 +175,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
           _settleIdleController();
         }
       }
-      _buildVersion.value++;
     } else if (oldWidget.animationDuration != widget.animationDuration &&
         _animController != null) {
       _animController!.duration = _effectiveDuration;
-    }
-
-    if (oldWidget.paintOrder != widget.paintOrder ||
-        oldWidget.fit != widget.fit) {
-      _buildVersion.value++;
     }
   }
 
@@ -203,10 +212,23 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         _pageAnimating = false;
         _previousIndex = _currentIndex;
       }
+      _deferPreloadsThisFrame();
       _buildVersion.value++;
-    } else {
+    } else if (!setEquals(
+        widget.controller.loadedIndexes, _builtLoadedIndexes)) {
       _buildVersion.value++;
     }
+  }
+
+  void _deferPreloadsThisFrame() {
+    if (_deferPreloads) return;
+    _deferPreloads = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _deferPreloads = false;
+      if (mounted && _hasHeldPreloads && !_pageAnimating) {
+        _buildVersion.value++;
+      }
+    });
   }
 
   @override
@@ -241,27 +263,36 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
         ? loadedIndexes.followedBy(<int>[_previousIndex])
         : loadedIndexes;
 
+    final bool holdPreloads = _deferPreloads || _pageAnimating;
+    _hasHeldPreloads = false;
+    _builtLoadedIndexes = loadedIndexes;
+    final Set<int> built = <int>{};
+
     for (final i in renderIndexes) {
       if (i >= widget.children.length) continue;
 
       final isIncoming = i == _currentIndex;
 
+      if (holdPreloads && !isIncoming && !_builtIndexes.contains(i)) {
+        _hasHeldPreloads = true;
+        continue;
+      }
+      built.add(i);
+
+      Widget child = TickerMode(
+        key: _pageKeys.putIfAbsent(i, GlobalKey.new),
+        enabled: isIncoming,
+        child: RepaintBoundary(child: widget.children[i]),
+      );
+
       if (widget.animation == IndexdAnimationType.none ||
           _animController == null) {
-        visibleChildren[i] = TickerMode(
-          enabled: isIncoming,
-          child: RepaintBoundary(child: widget.children[i]),
-        );
+        visibleChildren[i] = child;
         continue;
       }
 
       final isOutgoing = i == _previousIndex;
       final isParticipating = isIncoming || (isOutgoing && isAnimating);
-
-      Widget child = TickerMode(
-        enabled: isIncoming,
-        child: RepaintBoundary(child: widget.children[i]),
-      );
 
       child = _transitions.wrap(
         child: child,
@@ -273,6 +304,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
       visibleChildren[i] = child;
     }
+    _builtIndexes
+      ..clear()
+      ..addAll(built);
 
     return LazyRenderStack(
       index: _currentIndex,

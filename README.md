@@ -15,7 +15,7 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 
 ```yaml
 dependencies:
-  indexd_stack_dev: ^0.3.8
+  indexd_stack_dev: ^0.3.9
 ```
 
 ```bash
@@ -148,7 +148,7 @@ LazyStackController({
 | `disposePages(indexes)` | Remove multiple pages from memory |
 | `reset()` | Clear all pages except current and preloaded |
 | `preloadPage(index)` | Eagerly load a page into cache |
-| `preloadAdjacentPages([range])` | Preload pages adjacent to current |
+| `preloadAdjacentPages([range])` | Preload pages adjacent to current. Called right after `switchTo`, the preloaded pages build once the transition finishes (or on the next frame with `animation: none`), not in the switch frame |
 | `isLoaded(index)` | Check if a page is in memory |
 | `didHaveMemoryPressure()` | Manually trigger memory flush |
 
@@ -166,6 +166,10 @@ LazyLoadIndexedStack({
   TextDirection? textDirection,
 })
 ```
+
+### Performance tips
+
+- Hidden cached pages keep their last layout while the stack resizes (keyboard, rotation) and are re-laid out when shown. They still **rebuild** if they depend on `MediaQuery.of(context)`, so prefer the narrow accessors — `MediaQuery.sizeOf`, `MediaQuery.viewInsetsOf`, `MediaQuery.paddingOf` — which only rebuild for the value you read.
 
 ## Architecture
 

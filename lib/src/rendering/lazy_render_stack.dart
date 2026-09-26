@@ -138,19 +138,11 @@ class RenderLazyStack extends RenderBox
     }
   }
 
-  RenderBox? _getChild(int targetIndex) {
-    if (targetIndex < 0) return null;
-    int currentIndex = 0;
-    RenderBox? child = firstChild;
-    while (child != null) {
-      if (currentIndex == targetIndex) {
-        return child;
-      }
-      child = childAfter(child);
-      currentIndex++;
-    }
-    return null;
-  }
+  // Found during [performLayout] and reused by paint, hit-testing and
+  // semantics. Any change to the children or indexes marks this object for
+  // layout, so these are always current by the time they are read.
+  RenderBox? _activeChild;
+  RenderBox? _previousChild;
 
   @override
   void performLayout() {
@@ -159,6 +151,11 @@ class RenderLazyStack extends RenderBox
     // transition is running — determine the stack's size, so only they are
     // laid out with parentUsesSize: true. Hidden children use
     // parentUsesSize: false, which makes each one its own relayout boundary.
+    //
+    // A hidden child that has been laid out before keeps its previous
+    // constraints, so a resize (keyboard, rotation) doesn't re-lay out every
+    // cached page on each frame. It isn't painted, so a stale size is never
+    // seen; it gets the current constraints as soon as it participates.
     //
     // [StackFit.expand]: participating pages fill the viewport so the quiet
     // 0.992 scale reads as a full-bleed settle.
@@ -180,7 +177,10 @@ class RenderLazyStack extends RenderBox
     while (child != null) {
       final bool sizesStack = childIndex == _index ||
           (_previousIndex >= 0 && childIndex == _previousIndex);
-      child.layout(childConstraints, parentUsesSize: sizesStack);
+      child.layout(
+        sizesStack || !child.hasSize ? childConstraints : child.constraints,
+        parentUsesSize: sizesStack,
+      );
       if (sizesStack) {
         if (childIndex == _index) activeChild = child;
         if (childIndex == _previousIndex) previousChild = child;
@@ -203,6 +203,9 @@ class RenderLazyStack extends RenderBox
           : constraints.constrain(maxSize);
     }
 
+    _activeChild = activeChild;
+    _previousChild = previousChild;
+
     final Alignment resolvedAlignment = alignment.resolve(textDirection);
     for (final positioned in <RenderBox?>[activeChild, previousChild]) {
       if (positioned == null) continue;
@@ -214,13 +217,13 @@ class RenderLazyStack extends RenderBox
 
   @override
   void visitChildrenForSemantics(RenderObjectVisitor visitor) {
-    final active = _getChild(_index);
+    final active = _activeChild;
     if (active != null) visitor(active);
   }
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    final activeChild = _getChild(_index);
+    final activeChild = _activeChild;
     if (activeChild != null) {
       final LazyStackParentData childParentData =
           activeChild.parentData! as LazyStackParentData;
@@ -238,7 +241,9 @@ class RenderLazyStack extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (_clipBehavior == Clip.none) {
+    // Children are never laid out larger than the stack, so only a running
+    // transition (e.g. a shared-axis slide) can paint outside it.
+    if (_clipBehavior == Clip.none || _previousIndex < 0) {
       _paintChildren(context, offset);
       return;
     }
@@ -252,9 +257,8 @@ class RenderLazyStack extends RenderBox
   }
 
   void _paintChildren(PaintingContext context, Offset offset) {
-    final previousChild =
-        _previousIndex >= 0 ? _getChild(_previousIndex) : null;
-    final activeChild = _getChild(_index);
+    final previousChild = _previousChild;
+    final activeChild = _activeChild;
 
     void paintChild(RenderBox? box) {
       if (box == null) return;
