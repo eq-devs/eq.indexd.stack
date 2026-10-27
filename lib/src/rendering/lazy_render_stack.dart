@@ -146,11 +146,11 @@ class RenderLazyStack extends RenderBox
 
   @override
   void performLayout() {
-    // Every attached child MUST be laid out each pass (Flutter's layout
-    // contract). Only the active child — and the outgoing child while a
-    // transition is running — determine the stack's size, so only they are
-    // laid out with parentUsesSize: true. Hidden children use
+    // Only the active child, and the outgoing child while a transition is
+    // running, determine the stack's size, so only they are laid out with
+    // parentUsesSize: true. Hidden children are still laid out each pass, with
     // parentUsesSize: false, which makes each one its own relayout boundary.
+    // Laying them out keeps them ready to paint the moment they become active.
     //
     // A hidden child that has been laid out before keeps its previous
     // constraints, so a resize (keyboard, rotation) doesn't re-lay out every
@@ -168,9 +168,7 @@ class RenderLazyStack extends RenderBox
       size = constraints.biggest;
     }
 
-    final BoxConstraints childConstraints = expand
-        ? BoxConstraints.tight(size)
-        : (_fit == StackFit.loose ? constraints.loosen() : constraints);
+    final BoxConstraints childConstraints = _childConstraints(constraints);
 
     int childIndex = 0;
     RenderBox? child = firstChild;
@@ -213,6 +211,102 @@ class RenderLazyStack extends RenderBox
       childParentData.offset =
           resolvedAlignment.alongOffset((size - positioned.size) as Offset);
     }
+  }
+
+  BoxConstraints _childConstraints(BoxConstraints constraints) {
+    return switch (_fit) {
+      StackFit.expand => BoxConstraints.tight(constraints.biggest),
+      StackFit.loose => constraints.loosen(),
+      StackFit.passthrough => constraints,
+    };
+  }
+
+  /// The child at [childIndex], or null. Intrinsics and dry layout can run
+  /// before [performLayout], so they can't rely on [_activeChild].
+  RenderBox? _childAt(int childIndex) {
+    if (childIndex < 0) return null;
+    RenderBox? child = firstChild;
+    for (int i = 0; i < childIndex && child != null; i++) {
+      child = childAfter(child);
+    }
+    return child;
+  }
+
+  /// Largest [extent] among the children that size the stack.
+  double _participantExtent(double Function(RenderBox child) extent) {
+    double result = 0.0;
+    final RenderBox? active = _childAt(_index);
+    if (active != null) result = extent(active);
+    if (_previousIndex >= 0 && _previousIndex != _index) {
+      final RenderBox? previous = _childAt(_previousIndex);
+      if (previous != null) {
+        final double value = extent(previous);
+        if (value > result) result = value;
+      }
+    }
+    return result;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      _participantExtent((child) => child.getMinIntrinsicWidth(height));
+
+  @override
+  double computeMaxIntrinsicWidth(double height) =>
+      _participantExtent((child) => child.getMaxIntrinsicWidth(height));
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      _participantExtent((child) => child.getMinIntrinsicHeight(width));
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      _participantExtent((child) => child.getMaxIntrinsicHeight(width));
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    if (_fit == StackFit.expand) return constraints.biggest;
+    final BoxConstraints childConstraints = _childConstraints(constraints);
+    final RenderBox? active = _childAt(_index);
+    final RenderBox? previous =
+        _previousIndex >= 0 ? _childAt(_previousIndex) : null;
+    if (active == null && previous == null) return constraints.biggest;
+    double width = 0.0;
+    double height = 0.0;
+    for (final child in <RenderBox?>[active, previous]) {
+      if (child == null) continue;
+      final Size childSize = child.getDryLayout(childConstraints);
+      if (childSize.width > width) width = childSize.width;
+      if (childSize.height > height) height = childSize.height;
+    }
+    return constraints.constrain(Size(width, height));
+  }
+
+  @override
+  double? computeDryBaseline(
+      BoxConstraints constraints, TextBaseline baseline) {
+    final RenderBox? active = _childAt(_index);
+    if (active == null) return null;
+    final BoxConstraints childConstraints = _childConstraints(constraints);
+    final double? childBaseline =
+        active.getDryBaseline(childConstraints, baseline);
+    if (childBaseline == null) return null;
+    final Size size = getDryLayout(constraints);
+    final Size childSize = active.getDryLayout(childConstraints);
+    final Offset offset = alignment
+        .resolve(textDirection)
+        .alongOffset((size - childSize) as Offset);
+    return childBaseline + offset.dy;
+  }
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) {
+    final RenderBox? active = _activeChild;
+    if (active == null) return null;
+    final double? childBaseline = active.getDistanceToActualBaseline(baseline);
+    if (childBaseline == null) return null;
+    return childBaseline +
+        (active.parentData! as LazyStackParentData).offset.dy;
   }
 
   @override

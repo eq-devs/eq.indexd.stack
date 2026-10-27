@@ -12,9 +12,26 @@ import '../transitions/stack_transition_animations.dart';
 /// Defaults keep overhead at zero (`animation: [IndexdAnimationType.none]`).
 /// For bottom-navigation shells, use `animation: IndexdAnimationType.scaleIn`
 /// — duration defaults to [kScaleInDuration] (320ms).
+///
+/// Use [LazyLoadIndexedStack.builder] to construct pages on demand instead of
+/// passing them all up front.
 @immutable
 final class LazyLoadIndexedStack extends StatefulWidget {
-  final List<Widget> children;
+  /// The pages, or `null` when built with [LazyLoadIndexedStack.builder].
+  ///
+  /// A page's [Widget.key] identifies it, so a keyed page keeps its State
+  /// when the list is reordered (as long as its new index is still loaded).
+  final List<Widget>? children;
+
+  /// Builds the page at an index. Only called for loaded pages. `null`
+  /// unless built with [LazyLoadIndexedStack.builder].
+  final IndexedWidgetBuilder? itemBuilder;
+
+  final int? _itemCount;
+
+  /// Number of pages.
+  int get itemCount => children?.length ?? _itemCount!;
+
   final LazyStackController controller;
   final AlignmentGeometry alignment;
   final TextDirection? textDirection;
@@ -39,14 +56,32 @@ final class LazyLoadIndexedStack extends StatefulWidget {
   const LazyLoadIndexedStack({
     super.key,
     required this.controller,
-    required this.children,
+    required List<Widget> this.children,
     this.alignment = AlignmentDirectional.topStart,
     this.textDirection,
     this.animation = IndexdAnimationType.none,
     this.animationDuration,
     this.fit = StackFit.expand,
     this.paintOrder,
-  });
+  })  : itemBuilder = null,
+        _itemCount = null;
+
+  /// Builds pages on demand. [itemBuilder] runs only for pages the
+  /// controller has loaded, so unvisited pages are never constructed.
+  const LazyLoadIndexedStack.builder({
+    super.key,
+    required this.controller,
+    required int itemCount,
+    required IndexedWidgetBuilder this.itemBuilder,
+    this.alignment = AlignmentDirectional.topStart,
+    this.textDirection,
+    this.animation = IndexdAnimationType.none,
+    this.animationDuration,
+    this.fit = StackFit.expand,
+    this.paintOrder,
+  })  : assert(itemCount >= 0),
+        children = null,
+        _itemCount = itemCount;
 
   @override
   State<LazyLoadIndexedStack> createState() => _LazyLoadIndexedStackState();
@@ -75,8 +110,10 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   Set<int>? _builtLoadedIndexes;
 
   /// One key per page so its State survives a change of transition wrapper
-  /// (e.g. [IndexdAnimationType.none] → [IndexdAnimationType.scaleIn]).
-  final Map<int, GlobalKey> _pageKeys = <int, GlobalKey>{};
+  /// (e.g. [IndexdAnimationType.none] → [IndexdAnimationType.scaleIn]) and a
+  /// reorder of keyed pages. Keyed by the page's own [Widget.key], or by its
+  /// index when it has none.
+  final Map<Object, GlobalKey> _pageKeys = <Object, GlobalKey>{};
 
   final ValueNotifier<int> _buildVersion = ValueNotifier<int>(0);
   final StackTransitionAnimations _transitions = StackTransitionAnimations();
@@ -98,16 +135,28 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   @override
   void initState() {
     super.initState();
-    widget.controller.pageCount = widget.children.length;
-    _currentIndex = widget.controller.currentIndex;
+    syncLazyStackPageCount(widget.controller, widget.itemCount);
     assert(
-      _currentIndex >= 0 && _currentIndex < widget.children.length,
-      'LazyStackController.currentIndex ($_currentIndex) is out of range '
-      'for LazyLoadIndexedStack.children (length ${widget.children.length}).',
+      widget.controller.currentIndex >= 0 &&
+          widget.controller.currentIndex < widget.itemCount,
+      'LazyStackController.currentIndex (${widget.controller.currentIndex}) '
+      'is out of range for LazyLoadIndexedStack (${widget.itemCount} pages).',
     );
+    _currentIndex = _clampIndex(widget.controller.currentIndex);
     _previousIndex = _currentIndex;
     _setupAnimationControllerIfNeeded();
     widget.controller.addListener(_onControllerChanged);
+    // Pages the controller already holds (e.g. preloadIndexes) build a frame
+    // after the initial page instead of alongside it.
+    _deferPreloadsThisFrame();
+  }
+
+  /// Keeps the displayed index in range in release builds, where the
+  /// out-of-range asserts don't run.
+  int _clampIndex(int index) {
+    final int count = widget.itemCount;
+    if (count == 0 || index < 0) return 0;
+    return index < count ? index : count - 1;
   }
 
   void _setupAnimationControllerIfNeeded() {
@@ -147,16 +196,17 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onControllerChanged);
-      widget.controller.pageCount = widget.children.length;
+      syncLazyStackPageCount(widget.controller, widget.itemCount);
       widget.controller.addListener(_onControllerChanged);
 
       _animController?.stop();
       _animController?.value = 0;
       _pageAnimating = false;
-      _currentIndex = widget.controller.currentIndex;
+      _currentIndex = _clampIndex(widget.controller.currentIndex);
       _previousIndex = _currentIndex;
-    } else if (oldWidget.children.length != widget.children.length) {
-      widget.controller.pageCount = widget.children.length;
+    } else if (oldWidget.itemCount != widget.itemCount) {
+      syncLazyStackPageCount(widget.controller, widget.itemCount);
+      _currentIndex = _clampIndex(_currentIndex);
     }
 
     if (oldWidget.animation != widget.animation) {
@@ -183,17 +233,15 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
 
   void _onControllerChanged() {
     if (!mounted) return;
-    final newIndex = widget.controller.currentIndex;
+    final int rawIndex = widget.controller.currentIndex;
     assert(
-      newIndex >= 0 && newIndex < widget.children.length,
-      'LazyStackController.currentIndex ($newIndex) is out of range for '
-      'LazyLoadIndexedStack.children (length ${widget.children.length}). '
-      'This should not happen — pageCount is synced automatically from '
-      'children.length — unless something set controller.pageCount manually '
-      'to a value larger than children.length. Left unfixed, the stack '
-      'silently stops painting and stops responding to hit-tests for the '
-      'affected page.',
+      rawIndex >= 0 && rawIndex < widget.itemCount,
+      'LazyStackController.currentIndex ($rawIndex) is out of range for '
+      'LazyLoadIndexedStack (${widget.itemCount} pages). This should not '
+      'happen: pageCount is synced automatically from the page count. In '
+      'release builds the stack shows the nearest valid page instead.',
     );
+    final int newIndex = _clampIndex(rawIndex);
     if (newIndex != _currentIndex) {
       _previousIndex = _currentIndex;
       _currentIndex = newIndex;
@@ -245,31 +293,36 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: _buildVersion,
-      builder: (context, _, __) => _buildLazyRenderStack(),
+      builder: (context, _, __) => _buildLazyRenderStack(context),
     );
   }
 
-  Widget _buildLazyRenderStack() {
+  Widget _buildLazyRenderStack(BuildContext context) {
     final loadedIndexes = widget.controller.loadedIndexes;
+    final int itemCount = widget.itemCount;
     final visibleChildren = List<Widget>.filled(
-      widget.children.length,
+      itemCount,
       const SizedBox.shrink(),
     );
 
     final bool isAnimating = _animController?.isAnimating ?? false;
-    final Iterable<int> renderIndexes = (isAnimating &&
-            _previousIndex >= 0 &&
-            !loadedIndexes.contains(_previousIndex))
-        ? loadedIndexes.followedBy(<int>[_previousIndex])
-        : loadedIndexes;
+    // The displayed page is always built, even if the controller's cache
+    // doesn't hold it (e.g. its index was clamped), and the outgoing page
+    // stays built until its transition ends.
+    final Set<int> renderIndexes = <int>{
+      _currentIndex,
+      ...loadedIndexes,
+      if (isAnimating && _previousIndex >= 0) _previousIndex,
+    };
 
     final bool holdPreloads = _deferPreloads || _pageAnimating;
     _hasHeldPreloads = false;
     _builtLoadedIndexes = loadedIndexes;
     final Set<int> built = <int>{};
+    final Set<Object> builtIds = <Object>{};
 
     for (final i in renderIndexes) {
-      if (i >= widget.children.length) continue;
+      if (i < 0 || i >= itemCount) continue;
 
       final isIncoming = i == _currentIndex;
 
@@ -279,10 +332,20 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
       }
       built.add(i);
 
+      final Widget page =
+          widget.children?[i] ?? widget.itemBuilder!(context, i);
+      // A duplicate key falls back to the index so two pages never share a
+      // GlobalKey.
+      Object id = page.key ?? i;
+      if (!builtIds.add(id)) {
+        id = i;
+        builtIds.add(id);
+      }
+
       Widget child = TickerMode(
-        key: _pageKeys.putIfAbsent(i, GlobalKey.new),
+        key: _pageKeys.putIfAbsent(id, GlobalKey.new),
         enabled: isIncoming,
-        child: RepaintBoundary(child: widget.children[i]),
+        child: RepaintBoundary(child: page),
       );
 
       if (widget.animation == IndexdAnimationType.none ||
@@ -307,6 +370,9 @@ class _LazyLoadIndexedStackState extends State<LazyLoadIndexedStack>
     _builtIndexes
       ..clear()
       ..addAll(built);
+    // A page that wasn't built this frame is unmounted, so its key has
+    // nothing left to preserve.
+    _pageKeys.removeWhere((id, _) => !builtIds.contains(id));
 
     return LazyRenderStack(
       index: _currentIndex,

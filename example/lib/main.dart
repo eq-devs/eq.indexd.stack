@@ -48,7 +48,7 @@ class _LazyStackHomePageState extends State<LazyStackHomePage> {
       initialIndex: 0,
       disposeUnused: false,
       maxCachedPages: 4,
-      isListenMemoryPressure: false,
+      listenToMemoryPressure: false,
     );
     mainController.addListener(_onControllerChanged);
     _logMemory("App started. Cache size max: 4");

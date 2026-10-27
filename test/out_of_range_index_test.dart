@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indexd_stack_dev/indexd_stack_dev.dart';
+import 'package:indexd_stack_dev/src/controller/lazy_stack_controller.dart'
+    show syncLazyStackPageCount;
 
 void main() {
   testWidgets(
@@ -67,8 +69,8 @@ void main() {
   );
 
   testWidgets(
-    'asserts if pageCount is set manually to a value larger than '
-    'children.length, bypassing the automatic sync',
+    'asserts if pageCount drifts above children.length, bypassing the '
+    'automatic sync',
     (tester) async {
       final controller = LazyStackController();
 
@@ -94,7 +96,7 @@ void main() {
       // propagate to the caller, so the assertion surfaces via
       // FlutterError reporting (tester.takeException()), not as a
       // synchronous throw here.
-      controller.pageCount = 5;
+      syncLazyStackPageCount(controller, 5);
       controller.switchTo(4);
 
       expect(tester.takeException(), isAssertionError);

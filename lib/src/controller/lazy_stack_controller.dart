@@ -2,6 +2,12 @@ import 'dart:collection';
 
 import 'package:flutter/widgets.dart';
 
+/// Sets [LazyStackController.pageCount]. Called by `LazyLoadIndexedStack`
+/// only; not exported from the package.
+void syncLazyStackPageCount(LazyStackController controller, int count) {
+  controller._pageCount = count;
+}
+
 /// Controls which pages are loaded, cached, and currently visible in a
 /// `LazyLoadIndexedStack`.
 class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
@@ -9,7 +15,12 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   final int maxCachedPages;
   final List<int> preloadIndexes;
   final bool disposeUnused;
-  final bool isListenMemoryPressure;
+
+  /// Whether the cache is flushed on OS memory-pressure warnings.
+  final bool listenToMemoryPressure;
+
+  @Deprecated('Use listenToMemoryPressure. Will be removed in 0.5.0.')
+  bool get isListenMemoryPressure => listenToMemoryPressure;
 
   final LinkedHashSet<int> _loadedPages = LinkedHashSet<int>();
   Set<int>? _loadedIndexesView;
@@ -17,25 +28,29 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Total number of pages this controller can navigate across.
   ///
-  /// Kept in sync automatically by [LazyLoadIndexedStack] from
-  /// `children.length` — you don't need to set this yourself in normal use.
-  /// `null` (the default before a widget attaches) disables the upper-bound
-  /// check in [switchTo] / [preloadPage] / [preloadAdjacentPages].
-  int? pageCount;
+  /// Kept in sync by `LazyLoadIndexedStack` from its page count. `null`
+  /// before a widget attaches, which disables the upper-bound check in
+  /// [switchTo] / [preloadPage] / [preloadAdjacentPages].
+  int? get pageCount => _pageCount;
+  int? _pageCount;
 
   LazyStackController({
     int initialIndex = 0,
     this.preloadIndexes = const [],
     this.disposeUnused = false,
     this.maxCachedPages = 3,
-    this.isListenMemoryPressure = false,
-  }) : _currentIndex = initialIndex {
+    bool listenToMemoryPressure = false,
+    @Deprecated('Use listenToMemoryPressure. Will be removed in 0.5.0.')
+    bool? isListenMemoryPressure,
+  })  : listenToMemoryPressure =
+            isListenMemoryPressure ?? listenToMemoryPressure,
+        _currentIndex = initialIndex {
     _markAsUsed(initialIndex);
     for (final index in preloadIndexes) {
       _markAsUsed(index);
     }
 
-    if (isListenMemoryPressure) {
+    if (this.listenToMemoryPressure) {
       WidgetsBinding.instance.addObserver(this);
     }
   }
@@ -43,7 +58,6 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   Set<int> get loadedIndexes =>
       _loadedIndexesView ??= Set<int>.unmodifiable(_loadedPages);
   int get currentIndex => _currentIndex;
-  bool get canGoBack => _currentIndex > 0;
   bool isLoaded(int index) => _loadedPages.contains(index);
 
   bool _isProtected(int index) =>
@@ -78,7 +92,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
 
   void switchTo(int index) {
     if (index < 0 ||
-        (pageCount != null && index >= pageCount!) ||
+        (_pageCount != null && index >= _pageCount!) ||
         index == _currentIndex) {
       return;
     }
@@ -156,7 +170,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
 
   void preloadPage(int index) {
     if (index < 0 ||
-        (pageCount != null && index >= pageCount!) ||
+        (_pageCount != null && index >= _pageCount!) ||
         _loadedPages.contains(index)) {
       return;
     }
@@ -167,7 +181,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
 
   void preloadAdjacentPages([int range = 1]) {
     bool changed = false;
-    final int? total = pageCount;
+    final int? total = _pageCount;
 
     for (int i = 1; i <= range; i++) {
       final nextIndex = _currentIndex + i;
@@ -194,7 +208,7 @@ class LazyStackController extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     _loadedIndexesView = null;
     _loadedPages.clear();
-    if (isListenMemoryPressure) {
+    if (listenToMemoryPressure) {
       WidgetsBinding.instance.removeObserver(this);
     }
     super.dispose();

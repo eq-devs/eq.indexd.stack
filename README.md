@@ -9,13 +9,14 @@ A high-performance lazy-loading `IndexedStack` for Flutter with a custom `Render
 - 💾 **LRU Cache**: Configurable `maxCachedPages` with automatic least-recently-used eviction
 - 🧹 **Memory Pressure**: Automatic cache flush on OS memory warnings via `WidgetsBindingObserver`
 - 🔄 **TickerMode**: Animations in background tabs are automatically paused
+- 🏗️ **Builder constructor**: `LazyLoadIndexedStack.builder` constructs only loaded pages
 - 🎯 **Zero Overhead**: When `animation: IndexdAnimationType.none`, no `AnimationController` is allocated
 
 ## Installation
 
 ```yaml
 dependencies:
-  indexd_stack_dev: ^0.3.9
+  indexd_stack_dev: ^0.4.0
 ```
 
 ```bash
@@ -41,8 +42,6 @@ class _MyAppState extends State<MyApp> {
     controller = LazyStackController(
       initialIndex: 0,
       maxCachedPages: 3,
-      disposeUnused: true,
-      isListenMemoryPressure: true,
     );
   }
   
@@ -120,6 +119,20 @@ Animation type can be changed dynamically at runtime. Switching to `none` immedi
 
 > Omit `animationDuration` to use type defaults (`scaleIn` → 320ms, others → 200ms). Pass an explicit duration to override.
 
+## Building pages on demand
+
+`children` constructs every page widget on each parent build, even pages that are never shown. With many tabs, use the builder constructor. `itemBuilder` runs only for pages the controller has loaded.
+
+```dart
+LazyLoadIndexedStack.builder(
+  controller: controller,
+  itemCount: tabs.length,
+  itemBuilder: (context, index) => tabs[index].buildPage(),
+)
+```
+
+Give pages a `Key` if the list can be reordered. A keyed page keeps its State when it moves, as long as its new index is still loaded.
+
 ## API Reference
 
 ### LazyStackController
@@ -130,16 +143,22 @@ LazyStackController({
   List<int> preloadIndexes = const [],
   bool disposeUnused = false,
   int maxCachedPages = 3,
-  bool isListenMemoryPressure = false,
+  bool listenToMemoryPressure = false,
 })
 ```
+
+| Option | Effect |
+|---|---|
+| `maxCachedPages` | Least-recently-used pages beyond this count are disposed. |
+| `preloadIndexes` | Loaded up front and never evicted, so the cache can hold more than `maxCachedPages`. They build one frame after the initial page. |
+| `disposeUnused` | Disposes every page except the current and preloaded ones on each switch, so returning to a tab rebuilds it from scratch. It overrides `maxCachedPages`. Leave it off unless memory is critical. |
+| `listenToMemoryPressure` | Flushes unprotected pages when the OS reports memory pressure. |
 
 | Property | Type | Description |
 |---|---|---|
 | `currentIndex` | `int` | Currently visible page |
 | `loadedIndexes` | `Set<int>` | Pages currently in memory |
-| `canGoBack` | `bool` | Whether current index > 0 |
-| `pageCount` | `int?` | Total pages; synced automatically from `LazyLoadIndexedStack.children.length` — don't set this yourself in normal use |
+| `pageCount` | `int?` | Total pages, read-only. Synced automatically by `LazyLoadIndexedStack` |
 
 | Method | Description |
 |---|---|
@@ -165,7 +184,16 @@ LazyLoadIndexedStack({
   AlignmentGeometry alignment = AlignmentDirectional.topStart,
   TextDirection? textDirection,
 })
+
+LazyLoadIndexedStack.builder({
+  required LazyStackController controller,
+  required int itemCount,
+  required IndexedWidgetBuilder itemBuilder,
+  // ...same optional parameters as above
+})
 ```
+
+The stack supports intrinsic sizing, dry layout and baselines, so it works inside `IntrinsicHeight`, baseline-aligned `Row`s and other measuring parents. Only the active page (and the outgoing page mid-transition) contributes.
 
 ### Performance tips
 

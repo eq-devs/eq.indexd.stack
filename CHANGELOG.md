@@ -1,3 +1,27 @@
+## 0.4.0
+
+### 💥 Breaking
+- **`LazyStackController.pageCount` is now read-only.** `LazyLoadIndexedStack` keeps it in sync; setting it by hand was the last way to make `currentIndex` drift out of range.
+- **Removed `LazyStackController.canGoBack`.** It only checked `currentIndex > 0`; the controller has no navigation history.
+- **`LazyLoadIndexedStack.children` is now `List<Widget>?`** (`null` for the new builder constructor). Use `itemCount` to read the page count.
+- **Minimum Flutter is now 3.24** (it already was in practice, via the Dart `^3.5.4` constraint).
+
+### ✨ New
+- **`LazyLoadIndexedStack.builder(itemCount:, itemBuilder:)`.** `itemBuilder` runs only for loaded pages, so unvisited pages are never constructed.
+- **`listenToMemoryPressure`** replaces `isListenMemoryPressure`. The old name still works and is deprecated until 0.5.0.
+
+### 🐛 Fixes
+- **Intrinsics, dry layout and baselines.** The stack threw from `getDryLayout` and reported zero intrinsic size, so it collapsed inside `IntrinsicHeight` and broke baseline-aligned `Row`s and other measuring parents. It now measures the active page (and the outgoing page mid-transition).
+- **Keyed pages keep their State when `children` is reordered.** Pages were identified by index only, so reordering recreated every moved page.
+- **Out-of-range index no longer blanks the stack in release builds.** When the current index is past the last page (e.g. `children` shrank), the stack shows the last page instead of nothing. Debug builds still assert.
+
+### ⚡ Performance
+- **`preloadIndexes` no longer build in the first frame.** They now build one frame after the initial page, so they stop adding to cold-start time. `isLoaded()` still reports them as loaded immediately.
+
+### 📝 Docs
+- Quick Start no longer recommends `disposeUnused: true`, which disposes every other page on each switch and defeats the cache.
+- Documented how `preloadIndexes`, `disposeUnused` and `maxCachedPages` interact.
+
 ## 0.3.9
 
 ### ⚡ Performance
